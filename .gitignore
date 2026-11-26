@@ -165,3 +165,6 @@ playwright-report
 test-results
 .env
 .claude/settings.local.json
+
+# Cấu hình máy người dùng (Claude CLI...)
+config/*.local.json

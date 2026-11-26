@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 GH Issue Translator: process Node chạy nền trên Windows, theo dõi GitHub Projects v2 tiếng Nhật, dịch issue/comment sang tiếng Việt bằng `claude -p` local, báo bằng toast Windows, UI đọc ở `localhost`. Vision, phạm vi, roadmap và câu hỏi mở: `docs/product/vision.md`. Giao tiếp với user bằng tiếng Việt.
 
-Trạng thái hiện tại: khung + harness. Adapter thật (gh CLI, `claude -p`, toast) **chưa có** — roadmap bước 1 là spike hai điểm rủi ro đó trước khi viết tính năng phụ thuộc vào chúng.
+Trạng thái hiện tại: khung + harness + runner Claude CLI (`packages/core-translate/src/infrastructure/claude-cli/`, ADR-0003). Adapter `Translator` thật, gh CLI, toast **chưa có** — roadmap bước 1 là spike hai điểm rủi ro đó trước khi viết tính năng phụ thuộc vào chúng.
 
 ## Lệnh
 
@@ -33,6 +33,8 @@ pnpm monorepo, TypeScript strict, ESM, import nội bộ có đuôi `.ts` (chạ
 - `apps/app/src/server` (Hono) phục vụ `/api/*` và build tĩnh của `apps/app/web` (Vite + React).
 
 Từ vựng (`docs/domain/ubiquitous-language.md`) là bắt buộc cho tên trong code. Model, invariant, event của từng context: `docs/domain/bounded-contexts/`. Quyết định kiến trúc: `docs/architecture/adr/`.
+
+Gọi Claude CLI: luôn qua `runClaudeCli` (không shell, nội dung qua stdin, cwd tạm rỗng, `--tools ""`); không tự `spawn` claude ở chỗ khác. Test bằng `fake-claude-cli.mjs`, không gọi AI thật trong test. Chi tiết và lý do: ADR-0003.
 
 Hai bẫy đã biết từ thiết kế: mốc theo dõi luôn là `Issue.updatedAt` (không phải `updatedAt` của project item); Projects v2 không sort theo thời gian phía server.
 

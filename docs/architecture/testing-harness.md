@@ -7,7 +7,7 @@ Mục tiêu: Claude implement được mà **không cần** GitHub thật, `clau
 | Tầng | Công cụ | Phạm vi | Ai viết |
 |---|---|---|---|
 | Unit | Vitest, `*.test.ts` cạnh code | domain + application, dùng fake port | `implementer` (TDD) |
-| Contract (khi có adapter thật) | Vitest, `*.contract.test.ts` | Adapter thật vs fake cùng bộ case; chạy tay/có điều kiện | `implementer` |
+| Adapter | Vitest, cạnh adapter | Adapter thật với hệ ngoài **giả ở mức process**: Claude CLI → `fake-claude-cli.mjs` (mode ok/slow/hang/garbage/fail/wrapped, ghi lại argv/stdin/cwd). Tương tự sẽ có fake `gh` | `implementer` |
 | E2E | Playwright, `e2e/specs` | Hành vi người dùng qua UI + toast | `e2e-writer`, **khoá** sau khi user duyệt |
 
 ## Chạy app ở chế độ fake

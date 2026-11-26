@@ -21,7 +21,7 @@ Tool chạy nền trên Windows, theo dõi các GitHub Projects (v2) tiếng Nh�
 
 ## Roadmap (theo thứ tự rủi ro)
 
-1. **Spike:** `claude -p` từ process Task Scheduler; `gh api graphql` với `items(query: "updated:...")` + checklist `totalCount`.
+1. **Spike:** runner `claude -p` (đã có, ADR-0003) chạy từ process Task Scheduler; `gh api graphql` với `items(query: "updated:...")` + checklist `totalCount`.
 2. `core-translate`: `translate(text, from, to, context)`, glossary, giữ code block/link, cache theo hash.
 3. Poller + hàng đợi: 1 project cấu hình cứng, SQLite, toast.
 4. UI đọc: inbox, trang issue Việt | Nhật, đánh dấu đã đọc.
@@ -35,3 +35,4 @@ Tool chạy nền trên Windows, theo dõi các GitHub Projects (v2) tiếng Nh�
 - [ ] github.com hay GHES?
 - [ ] Độ chi tiết filter `updated:` (ngày tuyệt đối, giờ/phút).
 - [ ] Prisma hay better-sqlite3 (→ ADR khi chốt ở bước 3).
+- [x] Cách gọi `claude -p`: runner theo p-quizzz (ADR-0003). Còn spike trên Windows/Task Scheduler.
