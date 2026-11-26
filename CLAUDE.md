@@ -19,6 +19,7 @@ pnpm test path/to/file.test.ts      # một file unit
 pnpm test -t "tên test"             # một test theo tên
 pnpm e2e                            # Playwright; tự build web và chạy app fake ở :4317
 pnpm e2e e2e/specs/<file>.spec.ts   # một file e2e
+pnpm tokens                         # sinh apps/app/web/src/styles/tokens.css từ tokens.json
 pnpm diagnose                       # kiểm M0 trên máy Windows thật (GH_HOST, Projects v2, claude -p, --scheduler, --toast); không cần install
 pnpm dev                            # chạy app (hiện chỉ chạy được với APP_ADAPTERS=fake)
 ```
@@ -32,6 +33,7 @@ pnpm monorepo, TypeScript strict, ESM, import nội bộ có đuôi `.ts` (chạ
 - `apps/app/src/shared/ports` — port cho hệ ngoài (`GitHubGateway`, `Notifier`, `Clock`); `Translator` nằm trong core-translate.
 - `apps/app/src/composition-root.ts` — **nơi duy nhất** chọn adapter thật hay fake, theo `APP_ADAPTERS`.
 - `apps/app/src/server` (Hono) phục vụ `/api/*` và build tĩnh của `apps/app/web` (Vite + React).
+- UI: CSS thường + biến CSS từ design system (chỉ token). `apps/app/web/src/styles/tokens.json` là bản sao token của Design System artifact; sửa ở đó rồi `pnpm tokens`, không sửa `tokens.css` bằng tay, không viết mã màu thẳng trong component. Quy tắc dùng màu, chữ, trạng thái: README của design system (tóm tắt trong `docs/architecture/design-tokens.md`).
 
 Từ vựng (`docs/domain/ubiquitous-language.md`) là bắt buộc cho tên trong code. Model, invariant, event của từng context: `docs/domain/bounded-contexts/`. Quyết định kiến trúc: `docs/architecture/adr/`.
 

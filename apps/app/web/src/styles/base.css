@@ -1,0 +1,43 @@
+/* Nền tảng dùng token (tokens.css). Component tự viết CSS thường bằng var(--…), không viết mã màu thẳng. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 24px;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--ai);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ai);
+  outline-offset: 2px;
+}
+
+code,
+pre {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  background: var(--code-surface);
+  border-radius: var(--radius-sm);
+}
+
+pre {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  overflow-x: auto;
+}
+
+:lang(ja) {
+  font-family: var(--font-ja);
+}
