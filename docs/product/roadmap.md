@@ -35,8 +35,8 @@ Thiết kế phòng thủ vì không debug được trên máy thật: chỗ nà
 
 **Quyết định cần chốt khi hết M0:**
 - [x] github.com hay GHES → GHES qua `GH_HOST`
-- [ ] ADR-0004: Prisma, better-sqlite3 hay `node:sqlite` (chặn M2). Lưu ý: cài qua registry công ty; binary native tải từ GitHub releases có thể bị proxy chặn
-- [ ] ADR-0005: thư viện toast (chặn 007)
+- [ ] ADR-0004 (Proposed): `node:sqlite`, nâng Node máy thật lên ≥ 24.15 (chặn M2)
+- [ ] ADR-0005 (Proposed): PowerShell WinRT. Còn kiểm toast từ Task Scheduler (chặn 007)
 - [ ] Hai giả định về listen/unlisten trong `vision.md` (chặn M5)
 
 **Xong khi:** dịch được một issue thật từ process do Task Scheduler chạy, và lấy được thay đổi của một project thật bằng một query.
