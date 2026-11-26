@@ -155,3 +155,16 @@ vite.config.ts.timestamp-*
 .nx/cache
 .nx/workspace-data
 .nx/migrate-runs
+
+# Project
+dist
+node_modules
+*.db
+*.db-journal
+playwright-report
+test-results
+.env
+.claude/settings.local.json
+
+# Cấu hình máy người dùng (Claude CLI...)
+config/*.local.json

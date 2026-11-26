@@ -1,0 +1,28 @@
+# Context Map
+
+```
+                 ┌────────────────────┐
+  GitHub ──ACL──▶│      Tracking      │──ContentChanged──▶┌──────────────┐
+  (gh CLI)       │ project, issue,    │                   │ Translation  │◀── claude -p (ACL)
+                 │ content, listen,   │◀─TranslationReady─│ (core-trans- │
+                 │ poller             │                   │  late pkg)   │
+                 └─────────┬──────────┘                   └──────┬───────┘
+                           │ IssueEvent                          │ TranslationReady
+                           ▼                                     ▼
+                 ┌──────────────────────────────────────────────────┐
+                 │                 Notification                     │──▶ Windows toast (ACL)
+                 │ notify rules, pause, toast, summary toast        │
+                 └──────────────────────────────────────────────────┘
+```
+
+| Context | Vị trí code | Loại | Ghi chú |
+|---|---|---|---|
+| Tracking | `apps/app/src/contexts/tracking` | Core domain | Logic khó nhất: phát hiện thay đổi, listen 3 mức, backfill |
+| Translation | `packages/core-translate` | Generic / shared kernel | Tái dùng cho tool dịch chat → KHÔNG được import gì từ `apps/` |
+| Notification | `apps/app/src/contexts/notification` | Supporting | Chỉ bắn toast khi bản dịch đã sẵn |
+
+## Quan hệ & quy tắc
+
+- **Anti-Corruption Layer** cho mọi hệ ngoài: GitHub (`GitHubGateway`), Claude (`Translator`), Windows (`Notifier`). Domain không thấy JSON của GitHub hay stdout của CLI.
+- Context giao tiếp qua **domain event** trong process (in-memory bus), không gọi chéo repository của nhau.
+- `core-translate` là upstream; `app` là downstream (conformist với API `translate()`).
