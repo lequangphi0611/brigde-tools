@@ -1,0 +1,30 @@
+{
+  "name": "gh-issue-translator",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "pnpm --filter @app/app dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test",
+    "e2e:lock": "node scripts/e2e-lock.mjs write",
+    "e2e:lock:check": "node scripts/e2e-lock.mjs check",
+    "verify": "pnpm typecheck && pnpm test && pnpm e2e:lock:check && pnpm e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "^22.10.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.2.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
