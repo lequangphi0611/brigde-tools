@@ -30,6 +30,7 @@ Không đi qua `/feature`. **Ràng buộc:** máy chạy thật là máy công t
 | S0.1 | Runner `claude -p` chạy thủ công và qua Task Scheduler: xác thực, PATH, UTF-8 tiếng Nhật, tên cờ trên bản đang cài, thời gian mỗi lần dịch | `claude path/-p`, `--scheduler` → `[sched] …` | `docs/spikes/claude-cli-windows.md`, file `config/claude-cli.local.json` chạy được |
 | S0.2 | GHES (`GH_HOST`): Projects v2 có không, `items(query: "updated:…")` có hỗ trợ không; checklist `totalCount` (base = gt + lt + eq, khoảng tương lai = 0); filter theo updatedAt của item hay Issue; độ chi tiết giờ/phút; chi phí rate limit | `ghes`, `scope`, `projectsV2`, `updated:`, `filter basis`, `updated time`, `query cost` | `docs/spikes/projects-v2-polling.md` |
 | S0.3 | Toast PowerShell WinRT; bấm toast mở `http://localhost:<port>/issues/<id>` | `--toast` | `docs/spikes/windows-toast.md` |
+| S0.4 | Mẫu dịch theo lô (sau 001): model giữ nguyên chỗ giữ `⟦N⟧` và trả JSON mảng `{ segments }` không; mẫu cố định, không phải dữ liệu công ty | `claude batch` → `OK` / `PLACEHOLDER_MISMATCH n` / `MISSING_SEGMENT` / `NO_SEGMENTS` | bổ sung `docs/spikes/claude-cli-windows.md`; quyết định giữ kiểm chỗ giữ chặt hay nới |
 
 Thiết kế phòng thủ vì không debug được trên máy thật: chỗ nào chưa chắc thì adapter có hai nhánh chọn bằng config (vd. poller lọc `updated:` phía server hoặc lấy hết rồi lọc phía client), `diagnose` cho biết nên chọn nhánh nào.
 

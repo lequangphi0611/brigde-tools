@@ -1,6 +1,6 @@
 # 001 — Dịch cả issue ja→vi trong một lần gọi qua `ClaudeCliTranslator`
 
-- Trạng thái: draft
+- Trạng thái: approved
 - Context: Translation (`packages/core-translate`)
 - Cần UI: không
 
@@ -251,7 +251,6 @@ Scenario: AC-21 FakeTranslator theo port mới, giữ hợp đồng "[vi] " + te
 | AC-8, AC-10, AC-11 (dựng prompt) | unit (thuần) | `packages/core-translate/src/infrastructure/claude-cli/translation-prompt.test.ts` |
 | AC-15, AC-22, AC-23 (thuật toán chia lô, phần thuần) | unit (thuần) | `packages/core-translate/src/infrastructure/claude-cli/translation-prompt.test.ts` (hoặc file `chunking.test.ts` riêng) |
 | AC-1 … AC-9, AC-11 … AC-20, AC-22 … AC-24 (đầu-cuối adapter) | adapter test, Vitest + `fake-claude-cli.mjs` | `packages/core-translate/src/infrastructure/claude-cli/claude-cli-translator.test.ts` |
-| Mẫu dịch theo lô trong diagnose (bước 8) | unit (logic thuần của diagnose) | `scripts/diagnose/checks.test.ts` |
 | AC-1, AC-12, AC-13, AC-14, AC-21 (hợp đồng chung fake ↔ thật, ADR-0002) | unit, một bộ case chạy cho cả hai | `packages/core-translate/src/application/translator.contract.ts` + gọi từ `fake-translator.test.ts` và `claude-cli-translator.test.ts` |
 | (không có) | e2e | — xem "Đề xuất về e2e" |
 
@@ -276,6 +275,7 @@ Không có.
 - Bỏ qua lần gọi khi nội dung không có chữ Nhật (Câu hỏi mở 2: không làm ở story này).
 - Hàm bọc kiểu `translateText(text, …)` cho tool dịch chat (Câu hỏi mở 4: chưa cần).
 - Kiểm chỗ giữ kiểu mềm (Câu hỏi mở 5: chọn chặt).
+- Mẫu dịch theo lô trong `pnpm diagnose`: tách thành việc S0.4 ở M0 (roadmap), làm sau story này, không đi qua `/feature`.
 - Giữ nguyên `#123`, `org/repo#123`, SHA commit, bảng markdown, HTML khác (`<details>`, `<img>`): không che, dựa vào model.
 - Chữ trong ảnh, field của Project (theo vision).
 
@@ -291,7 +291,7 @@ Không có.
 ## Câu hỏi mở
 - [x] 1. Issue vượt `maxInputChars`? → **User chốt: adapter tự chia** các segment thành nhiều lần gọi CLI tuần tự, mỗi lần ≤ giới hạn, giữ thứ tự; segment đơn lẻ vẫn quá giới hạn → `input_too_large`, không chạy CLI; một lần gọi con lỗi → cả request lỗi. (AC-15, AC-22, AC-23, AC-24)
 - [x] 2. Bỏ qua lần gọi khi không có chữ Nhật? → **User chốt: không làm** ở story này (Ngoài phạm vi).
-- [x] 3. Thêm kiểm tra dịch theo lô vào `pnpm diagnose`? → **Quyết định mặc định (user chưa trả lời rõ, orchestrator giữ theo đề xuất): có.** Mẫu cố định, không phải dữ liệu công ty, chỉ in `OK` / `PLACEHOLDER_MISMATCH n` / `MISSING_SEGMENT` / `NO_SEGMENTS`. User có thể bỏ trước khi implement; khi đó bỏ bước 9.
+- [x] 3. Thêm kiểm tra dịch theo lô vào `pnpm diagnose`? → **User chốt (GATE 1): có, nhưng tách thành việc S0.4 ở M0, làm sau story này.** Mẫu cố định, không phải dữ liệu công ty, chỉ in `OK` / `PLACEHOLDER_MISMATCH n` / `MISSING_SEGMENT` / `NO_SEGMENTS`. Không thuộc kế hoạch implement của 001.
 - [x] 4. Tool dịch chat có gọi port cũ không? → **User chốt: tool dịch chat chưa được dựng**, đổi port tự do, không cần hàm bọc.
 - [x] 5. Kiểm chỗ giữ chặt hay mềm? → **User chốt: chặt** (AC-17).
 
@@ -307,13 +307,13 @@ Không còn câu hỏi mở.
 6. **Fake CLI.** Mở rộng `fake-claude-cli.mjs`: trả `segments` khi stdin có `<segment`; mode `batch-missing`, `batch-extra`, `batch-drop-placeholder`, `batch-result-text`; cờ `--fake-fail-on <n>`, `--fake-lock <file>`, ghi `startedAt`/`endedAt`. Test runner hiện có vẫn xanh (mode `ok` với `<source>` không có `<segment>` giữ hành vi cũ).
 7. **Infrastructure: `ClaudeCliTranslator`.** `infrastructure/claude-cli/claude-cli-translator.ts`: `loadCliConfig` mỗi lần → che → bỏ đoạn rỗng → chia lô (từ chối nếu quá giới hạn) → với từng lô **tuần tự**: `runClaudeCli` → validate zod → kiểm id + chỗ giữ; lỗi thì dừng → khôi phục và gộp theo thứ tự; map `CliRunFailure` → `TranslationFailure`. Test AC-1, AC-2, AC-12…AC-20, AC-22…AC-24 với fake CLI; chạy bộ hợp đồng.
 8. **Export + docs.** Export `ClaudeCliTranslator`, `TranslationFailure` từ `index.ts`; cập nhật mục Hệ quả của ADR-0003 trỏ sang ADR-0006 nếu cần. `pnpm verify` xanh (e2e smoke không đổi).
-9. **Diagnose: mẫu dịch theo lô (quyết định mặc định của Câu hỏi mở 3).** Thêm dòng `claude batch` vào `scripts/diagnose` (Node thuần, không import TS): mẫu cố định 2 segment có code block, link, mention đã che sẵn bằng `⟦N⟧`, schema `{ segments }`; in `OK` / `PLACEHOLDER_MISMATCH n` / `MISSING_SEGMENT` / `NO_SEGMENTS`, không in nội dung ngoài mẫu. Logic thuần trong `checks.mjs` + `checks.test.ts`. Cập nhật `docs/spikes/diagnose.md`. Bước này độc lập với 1–8; nếu cần tách story thì tách bước này ra trước (xem Cỡ).
 
 ## Cỡ
-Ước lượng sau khi thêm chia lô: bước 1–2 (nhận diện markdown) khoảng nửa ngày, là phần rủi ro nhất; bước 3–8 khoảng nửa ngày tới hơn nửa ngày (chia lô thêm khoảng 2–3 giờ gồm fake lock/fail-on); bước 9 khoảng 1–2 giờ. Tổng **vượt M một chút (khoảng 1,25–1,5 ngày)**. Không tự tách. Nếu muốn giữ M, đề xuất tách bước 9 (diagnose) thành việc riêng kiểu M0 (không cần đi qua `/feature`, không phụ thuộc code TS), làm trước hoặc song song. Phần lõi (bước 1–8) nên giữ nguyên một story vì AC chia lô, che và hợp đồng phụ thuộc lẫn nhau.
+Ước lượng sau khi thêm chia lô: bước 1–2 (nhận diện markdown) khoảng nửa ngày, là phần rủi ro nhất; bước 3–8 khoảng nửa ngày tới hơn nửa ngày (chia lô thêm khoảng 2–3 giờ gồm fake lock/fail-on); bước 9 khoảng 1–2 giờ. Tổng **vượt M một chút (khoảng 1,25–1,5 ngày)**. **User chốt: tách bước 9 (diagnose) thành S0.4, làm sau** → phần còn lại (bước 1–8) khoảng 1–1,25 ngày. Không tự tách. Nếu muốn giữ M, đề xuất tách bước 9 (diagnose) thành việc riêng kiểu M0 (không cần đi qua `/feature`, không phụ thuộc code TS), làm trước hoặc song song. Phần lõi (bước 1–8) nên giữ nguyên một story vì AC chia lô, che và hợp đồng phụ thuộc lẫn nhau.
 
 ## Workflow log
 | Bước | Thời điểm | Kết quả |
 |---|---|---|
 | 1 Phân tích | 2026-11-26 | Spec draft; đề xuất bỏ bước e2e; 5 câu hỏi mở |
 | 1 Phân tích (lần 2) | 2026-11-26 | User trả lời câu hỏi mở: tự chia lô tuần tự, không bỏ qua khi không có chữ Nhật, diagnose dịch theo lô (mặc định có), đổi port tự do, kiểm chỗ giữ chặt. Thêm AC-22…AC-24, sửa AC-15; 24 AC; cỡ hơi vượt M; không còn câu hỏi mở |
+| GATE 1 | 2026-11-26 | User duyệt. Diagnose dịch theo lô tách thành S0.4 (M0), làm sau. Bỏ bước 2 (không UI) và bước 3 (e2e: không có hành vi người dùng thấy được). Tiếp theo: bước 4 implement bước 1–8 |
