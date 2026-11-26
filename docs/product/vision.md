@@ -28,5 +28,5 @@ Chi tiết theo mốc và story: [roadmap.md](roadmap.md).
 - [ ] Tạm dừng toàn cục vẫn dịch nền? Listen lại project gom một toast tóm tắt?
 - [x] github.com hay GHES? → **GHES**, hostname qua biến môi trường `GH_HOST` (gh CLI tự dùng; adapter chỉ cần truyền env xuống process `gh`).
 - [ ] Độ chi tiết filter `updated:` (ngày tuyệt đối, giờ/phút).
-- [ ] Prisma hay better-sqlite3 (→ ADR khi chốt ở bước 3).
+- [x] Lưu trữ: `node:sqlite` (ADR-0004).
 - [x] Cách gọi `claude -p`: runner theo p-quizzz (ADR-0003). Còn spike trên Windows/Task Scheduler.

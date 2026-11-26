@@ -35,4 +35,6 @@ node scripts/diagnose/index.mjs --owner <org> --number <n> --scheduler --toast  
 | `claude path FAIL` | `command` đang trỏ tới `.cmd`/`.ps1`. Cần trỏ tới `claude.exe`, hoặc `node` + `cli.js` |
 | `claude -p FAIL UNKNOWN_FLAG --x` | Bản Claude CLI đang cài không có cờ đó, ADR-0003 cần chỉnh |
 | `[sched] …` | Kết quả của cùng phép thử khi chạy qua Task Scheduler (khác PATH, khác môi trường) |
+| `node:sqlite FAIL` | Không dùng được SQLite có sẵn trong Node → xem lại ADR-0004 (better-sqlite3) |
+| `sched toast FAIL` | Toast gửi từ process nền không hiện → xem lại ADR-0005 |
 | `toast click FAIL` | Cần cách toast khác, đưa vào ADR-0005 |

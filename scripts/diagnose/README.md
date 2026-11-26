@@ -33,7 +33,7 @@ Nếu đã `pnpm install` thì có thể dùng `pnpm diagnose --owner <org> --nu
 | `--claude <path>` | Đường dẫn tuyệt đối tới `claude.exe` (khi không dùng config) |
 | `--model <name>` | Model khi không dùng config (mặc định `sonnet`) |
 | `--scheduler` | Tạo task tạm, chạy lại phần Claude trong Task Scheduler, rồi tự xoá task |
-| `--toast` | Hiện toast thử và hỏi y/n |
+| `--toast` | Hiện toast thử và hỏi y/n. Đi kèm `--scheduler` thì gửi thêm một toast từ Task Scheduler |
 | `--write-config` | Ghi `config/claude-cli.local.json` từ claude tìm được (không ghi đè file đã có) |
 | `--skip-claude` | Bỏ qua phần Claude |
 | `--raw` | In lỗi gốc (chỉ tự đọc) |

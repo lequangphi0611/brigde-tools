@@ -68,6 +68,7 @@ function firstLine(s) {
 function checkEnv() {
   say("os", "INFO", `${process.platform} ${release()}`);
   say("node", "INFO", process.version);
+  checkSqlite();
   const gh = runSync("gh", ["--version"]);
   if (gh.error || gh.code !== 0) say("gh", "FAIL", "không chạy được gh (chưa cài hoặc không có trong PATH)");
   else say("gh", "OK", firstLine(gh.out).replace(/^gh version\s*/, ""));
@@ -79,6 +80,26 @@ function checkEnv() {
     say("registry", "INFO", /registry\.npmjs\.org/.test(reg) ? "mặc định (npmjs)" : reg ? "registry riêng" : "?"); // không in URL
   }
   return !gh.error && gh.code === 0;
+}
+
+// ADR-0004: node:sqlite có chạy trên máy này không (release candidate từ Node 24.15).
+function checkSqlite() {
+  const warned = [];
+  const onWarn = (w) => warned.push(w.name);
+  process.on("warning", onWarn);
+  try {
+    const { DatabaseSync } = process.getBuiltinModule("node:sqlite");
+    const db = new DatabaseSync(":memory:");
+    db.exec("PRAGMA journal_mode=WAL; CREATE TABLE t(v TEXT); INSERT INTO t VALUES ('tiếng Việt 日本語')");
+    const ok = db.prepare("SELECT v FROM t").get()?.v === "tiếng Việt 日本語";
+    const ver = db.prepare("SELECT sqlite_version() v").get().v;
+    db.close();
+    say("node:sqlite", ok ? "OK" : "FAIL", `SQLite ${ver}`);
+  } catch (e) {
+    say("node:sqlite", "FAIL", `không dùng được (${e.code ?? e.name})`);
+  } finally {
+    setImmediate(() => process.off("warning", onWarn));
+  }
 }
 
 // ---------- GitHub (GHES qua GH_HOST) ----------
@@ -358,7 +379,7 @@ async function checkScheduler() {
   if (!WIN) return say("scheduler", "SKIP", "chỉ chạy trên Windows");
   const name = "gh-issue-translator-m0-check";
   const out = join(tmpdir(), `m0-sched-${Date.now()}.txt`);
-  const argLine = `"${SCRIPT}" --only-claude --out "${out}"` + (opt.claude ? ` --claude "${opt.claude}"` : "") + ` --config "${opt.config}"`;
+  const argLine = `"${SCRIPT}" --only-claude --out "${out}"` + (opt.claude ? ` --claude "${opt.claude}"` : "") + ` --config "${opt.config}"` + (opt.toast ? " --toast" : "");
   const reg = powershell(`
 $ErrorActionPreference = 'Stop'
 $a = New-ScheduledTaskAction -Execute ${psq(process.execPath)} -Argument ${psq(argLine)} -WorkingDirectory ${psq(REPO)}
@@ -381,10 +402,16 @@ Start-ScheduledTask -TaskName ${psq(name)}`);
     if (/^\S+\s+FAIL/.test(l)) failures++;
   }
   rmSync(out, { force: true });
+  if (opt.toast && process.stdin.isTTY) {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const seen = (await rl.question('  Có thấy toast "[M0] Toast từ Task Scheduler" không? (y/n) ')).trim().toLowerCase() === "y";
+    rl.close();
+    say("sched toast", seen ? "OK" : "FAIL", seen ? "" : "→ toast từ process nền không hiện, cần xem lại ADR-0005");
+  }
 }
 
 // ---------- Toast (Windows) ----------
-async function checkToast() {
+async function checkToast(title = "[M0] Thử toast tiếng Việt: Lỗi đăng nhập") {
   if (!WIN) return say("toast", "SKIP", "chỉ chạy trên Windows");
   const url = "http://localhost:4317/issues/123";
   const r = powershell(`
@@ -394,7 +421,7 @@ $ErrorActionPreference = 'Stop'
 $xml = @'
 <toast activationType="protocol" launch="${url}">
   <visual><binding template="ToastGeneric">
-    <text>[M0] Thử toast tiếng Việt: Lỗi đăng nhập</text>
+    <text>${title}</text>
     <text>Bấm vào đây: trình duyệt phải mở ${url}</text>
   </binding></visual>
 </toast>
@@ -408,6 +435,7 @@ $app = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powersh
     return say("toast", "FAIL", "PowerShell WinRT không hiện được toast");
   }
   say("toast show", "INFO", "đã gửi toast (PowerShell WinRT)");
+  if (opt["only-claude"]) return;
   if (!process.stdin.isTTY) return say("toast click", "SKIP", "không hỏi được (không phải terminal)");
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   const seen = (await rl.question("  Toast có hiện, tiếng Việt đúng dấu không? (y/n) ")).trim().toLowerCase() === "y";
@@ -424,6 +452,7 @@ async function main() {
     const p = runSync(WIN ? "where.exe" : "which", ["claude"]);
     say("PATH claude", "INFO", firstLine(p.out) ? "có" : "không (dùng đường dẫn tuyệt đối trong config)");
     await checkClaude();
+    if (opt.toast) await checkToast("[M0] Toast từ Task Scheduler");
   } else {
     console.log(`gh-issue-translator diagnose — ${new Date().toISOString().slice(0, 10)}\n`);
     if (checkEnv() && checkGitHub()) checkProject();
