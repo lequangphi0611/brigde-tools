@@ -23,17 +23,19 @@ M3 và M4 có thể làm song song hoặc đảo thứ tự sau M2.
 
 ## M0 — Spike và chốt quyết định (trên máy Windows)
 
-Không đi qua `/feature`. Người chạy trên máy thật; Claude viết script và ghi kết quả vào `docs/spikes/`.
+Không đi qua `/feature`. **Ràng buộc:** máy chạy thật là máy công ty, code lấy về bằng zip, không push kết quả ngược lại được, và không được mang dữ liệu công ty ra ngoài. Vì vậy spike gói thành lệnh `pnpm diagnose` (`scripts/diagnose/`, Node thuần, chạy được trước `pnpm install`): output chỉ gồm trạng thái / phiên bản / số đếm / mã lỗi. Người dùng gõ lại các dòng đó; Claude ghi kết quả vào `docs/spikes/`. Cách chạy và đọc kết quả: `docs/spikes/diagnose.md`.
 
-| # | Việc | Đầu ra |
-|---|---|---|
-| S0.1 | Runner `claude -p` (đã có) chạy thủ công và chạy qua Task Scheduler: xác thực, PATH, UTF-8 tiếng Nhật, tên cờ trên bản đang cài, thời gian mỗi lần dịch | `docs/spikes/claude-cli-windows.md`, file `config/claude-cli.local.json` chạy được |
-| S0.2 | `gh api graphql` lấy item một Project v2 với `items(query: "updated:…")`; checklist `totalCount` (base = gt + lt + eq, khoảng tương lai = 0); đo chi phí rate limit một chu kỳ | `docs/spikes/projects-v2-polling.md` |
-| S0.3 | Toast: node-notifier so với PowerShell; bấm toast mở `http://localhost:<port>/issues/<id>` | `docs/spikes/windows-toast.md` |
+| # | Việc | Dòng trong `diagnose` | Đầu ra |
+|---|---|---|---|
+| S0.1 | Runner `claude -p` chạy thủ công và qua Task Scheduler: xác thực, PATH, UTF-8 tiếng Nhật, tên cờ trên bản đang cài, thời gian mỗi lần dịch | `claude path/-p`, `--scheduler` → `[sched] …` | `docs/spikes/claude-cli-windows.md`, file `config/claude-cli.local.json` chạy được |
+| S0.2 | GHES (`GH_HOST`): Projects v2 có không, `items(query: "updated:…")` có hỗ trợ không; checklist `totalCount` (base = gt + lt + eq, khoảng tương lai = 0); filter theo updatedAt của item hay Issue; độ chi tiết giờ/phút; chi phí rate limit | `ghes`, `scope`, `projectsV2`, `updated:`, `filter basis`, `updated time`, `query cost` | `docs/spikes/projects-v2-polling.md` |
+| S0.3 | Toast PowerShell WinRT; bấm toast mở `http://localhost:<port>/issues/<id>` | `--toast` | `docs/spikes/windows-toast.md` |
+
+Thiết kế phòng thủ vì không debug được trên máy thật: chỗ nào chưa chắc thì adapter có hai nhánh chọn bằng config (vd. poller lọc `updated:` phía server hoặc lấy hết rồi lọc phía client), `diagnose` cho biết nên chọn nhánh nào.
 
 **Quyết định cần chốt khi hết M0:**
-- [ ] github.com hay GHES (chặn S0.2)
-- [ ] ADR-0004: Prisma hay better-sqlite3 (chặn M2)
+- [x] github.com hay GHES → GHES qua `GH_HOST`
+- [ ] ADR-0004: Prisma, better-sqlite3 hay `node:sqlite` (chặn M2). Lưu ý: cài qua registry công ty; binary native tải từ GitHub releases có thể bị proxy chặn
 - [ ] ADR-0005: thư viện toast (chặn 007)
 - [ ] Hai giả định về listen/unlisten trong `vision.md` (chặn M5)
 

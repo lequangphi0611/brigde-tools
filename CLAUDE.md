@@ -19,6 +19,7 @@ pnpm test path/to/file.test.ts      # một file unit
 pnpm test -t "tên test"             # một test theo tên
 pnpm e2e                            # Playwright; tự build web và chạy app fake ở :4317
 pnpm e2e e2e/specs/<file>.spec.ts   # một file e2e
+pnpm diagnose                       # kiểm M0 trên máy Windows thật (GH_HOST, Projects v2, claude -p, --scheduler, --toast); không cần install
 pnpm dev                            # chạy app (hiện chỉ chạy được với APP_ADAPTERS=fake)
 ```
 

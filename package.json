@@ -14,6 +14,7 @@
     "e2e": "playwright test",
     "e2e:lock": "node scripts/e2e-lock.mjs write",
     "e2e:lock:check": "node scripts/e2e-lock.mjs check",
+    "diagnose": "node scripts/diagnose/index.mjs",
     "verify": "pnpm typecheck && pnpm test && pnpm e2e:lock:check && pnpm e2e"
   },
   "devDependencies": {
