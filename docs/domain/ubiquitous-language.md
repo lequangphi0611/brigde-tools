@@ -18,6 +18,12 @@ Khi story đưa thêm khái niệm, `analyst` thêm vào đây TRƯỚC khi impl
 | Toast tóm tắt | `SummaryToast` | Notification | Một toast "N mục mới" khi listen lại project |
 | Bản dịch | `Translation` | Translation | Kết quả dịch, khoá = `hash(text) + direction` |
 | Chiều dịch | `Direction` | Translation | `{ from, to }`; MVP chỉ `ja→vi` |
+| Đoạn dịch | `TranslationSegment` | Translation | Một chuỗi cần dịch trong một yêu cầu, `{ id, text }`; `id` mờ do bên gọi đặt (app map `Content` → đoạn) |
+| Yêu cầu dịch | `TranslationRequest` | Translation | Lô đoạn dịch + `Direction` + ngữ cảnh, đi trong **một** lần gọi engine (cả issue một lần) |
+| Kết quả dịch | `TranslationResult` | Translation | Đúng tập id của yêu cầu, cùng thứ tự, kèm `model`; không có kết quả một phần |
+| Phần giữ nguyên | `ProtectedSpan` | Translation | Đoạn không được dịch: code block, inline code, URL, `@mention`, email, comment HTML, thẻ phân cách giả |
+| Chỗ giữ | `placeholder` | Translation | Ký hiệu `⟦N⟧` thay phần giữ nguyên khi gửi cho engine, khôi phục nguyên văn sau khi nhận |
+| Lỗi dịch | `TranslationFailure` | Translation | Lỗi của port: `reason` = `not_configured` / `input_too_large` / `timeout` / `process_failed` / `bad_output`; không chứa nội dung |
 | Thuật ngữ | `GlossaryTerm` | Translation | Cặp ja↔vi; `projectId = null` là chung. Project thắng khi trùng |
 | Phiên bản glossary | `glossaryVersion` | Translation | Đổi glossary → bản dịch cũ có thể dịch lại |
 | Job dịch | `TranslationJob` | Translation | Mục trong hàng đợi: priority, status, attempts |
