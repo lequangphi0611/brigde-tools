@@ -2,7 +2,7 @@
   "command": "C:\\Users\\<you>\\.local\\bin\\claude.exe",
   "args": ["--model", "sonnet", "--settings", "C:\\Users\\<you>\\.claude\\translator-settings.json"],
   "env": {},
-  "timeoutSeconds": 120,
+  "timeoutSeconds": 300,
   "concurrency": 2,
   "maxInputChars": 30000
 }

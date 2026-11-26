@@ -245,11 +245,11 @@ function checkProject() {
 
 // ---------- Claude CLI ----------
 function resolveClaude() {
-  if (opt.claude) return { command: opt.claude, args: ["--model", opt.model], env: {}, source: "--claude", timeoutSeconds: 180 };
+  if (opt.claude) return { command: opt.claude, args: ["--model", opt.model], env: {}, source: "--claude", timeoutSeconds: 300 };
   if (existsSync(opt.config)) {
     try {
       const c = JSON.parse(readFileSync(opt.config, "utf8"));
-      return { command: c.command, args: c.args ?? [], env: c.env ?? {}, source: "config", timeoutSeconds: c.timeoutSeconds ?? 180 };
+      return { command: c.command, args: c.args ?? [], env: c.env ?? {}, source: "config", timeoutSeconds: c.timeoutSeconds ?? 300 };
     } catch {
       say("claude cfg", "FAIL", "config/claude-cli.local.json không phải JSON hợp lệ");
       return undefined;
@@ -258,7 +258,7 @@ function resolveClaude() {
   const found = runSync(WIN ? "where.exe" : "which", ["claude"]);
   const pick = chooseClaude(found.out.split(/\r?\n/), WIN);
   if (!pick) return undefined;
-  const base = { env: {}, source: `PATH(${pick.kind})`, timeoutSeconds: 180 };
+  const base = { env: {}, source: `PATH(${pick.kind})`, timeoutSeconds: 300 };
   if (pick.kind === "npm") {
     // Shim npm gọi node với cli.js của package @anthropic-ai/claude-code nằm cạnh nó.
     const cli = join(dirname(pick.path), "node_modules", "@anthropic-ai", "claude-code", "cli.js");
@@ -273,7 +273,7 @@ function resolveClaude() {
 
 function writeConfig(cfg) {
   if (existsSync(opt.config)) return say("write config", "SKIP", "config/claude-cli.local.json đã có, không ghi đè");
-  const json = { command: cfg.command, args: cfg.args, env: {}, timeoutSeconds: 120, concurrency: 2, maxInputChars: 30000 };
+  const json = { command: cfg.command, args: cfg.args, env: {}, timeoutSeconds: 300, concurrency: 2, maxInputChars: 30000 };
   writeFileSync(opt.config, JSON.stringify(json, null, 2) + "\n", "utf8");
   say("write config", "OK", "đã ghi config/claude-cli.local.json → thêm --settings vào args hoặc biến vào env nếu cần");
 }
@@ -369,8 +369,8 @@ Start-ScheduledTask -TaskName ${psq(name)}`);
     raw(reg.err);
     return say("scheduler", "FAIL", "không tạo/chạy được task (GPO chặn?)");
   }
-  say("scheduler", "INFO", "đã tạo task tạm, đang chờ lượt chạy claude (tối đa ~4 phút)…");
-  const deadline = Date.now() + 240_000;
+  say("scheduler", "INFO", "đã tạo task tạm, đang chờ lượt chạy claude (tối đa ~6 phút)…");
+  const deadline = Date.now() + 360_000;
   while (!existsSync(out) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 2000));
   await new Promise((r) => setTimeout(r, 500));
   const info = powershell(`(Get-ScheduledTaskInfo -TaskName ${psq(name)}).LastTaskResult; Unregister-ScheduledTask -TaskName ${psq(name)} -Confirm:$false`);

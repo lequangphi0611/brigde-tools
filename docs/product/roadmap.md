@@ -47,7 +47,7 @@ Thiết kế phòng thủ vì không debug được trên máy thật: chỗ nà
 
 | # | Story | Context | UI | Cỡ | Phụ thuộc |
 |---|---|---|---|---|---|
-| 001 | Dịch một đoạn ja→vi qua `ClaudeCliTranslator`, giữ nguyên code block, inline code, link, `@mention`; nội dung issue được coi là dữ liệu (khối phân cách, vô hiệu hoá thẻ giả) | Translation | – | M | S0.1 |
+| 001 | Dịch ja→vi qua `ClaudeCliTranslator`, **cả issue trong một lần gọi** (title + body + comment mới; ~100s/lần trên máy thật, xem `docs/spikes/claude-cli-windows.md`), giữ nguyên code block, inline code, link, `@mention`; nội dung issue được coi là dữ liệu (khối phân cách, vô hiệu hoá thẻ giả) | Translation | – | M | S0.1 |
 | 002 | Glossary hai tầng ghép vào prompt (bản của project thắng khi trùng) | Translation | – | S | 001 |
 | 003 | Cache bản dịch theo `hash + direction + glossaryVersion` (port trong core-translate, adapter ở app) | Translation | – | S | 001 |
 
@@ -63,7 +63,7 @@ Lần đầu tiên dùng thật được. Project cấu hình cứng trong file 
 |---|---|---|---|---|---|
 | 004 | Lưu trữ SQLite + migration + bảng `setting` | hạ tầng | – | S | ADR-0004 |
 | 005 | Poller một project: phát hiện issue mới và comment mới theo `Issue.updatedAt`; lần đầu chỉ lấy mốc thời gian; issue bị sửa thì dịch lại nhưng không báo. Có `GhCliGateway` + fake `gh` ở mức process | Tracking | – | M | S0.2, 004 |
-| 006 | Hàng đợi dịch bền (bảng `job`): tối đa 2 job song song, retry có giới hạn, ưu tiên mục liên quan tới tôi, job dở được chạy lại sau khi restart | Translation | – | M | 003, 004 |
+| 006 | Hàng đợi dịch bền (bảng `job`): tối đa 2 job song song (≈70 lần gọi/giờ), gộp các comment mới của cùng issue vào một job, retry có giới hạn, ưu tiên mục liên quan tới tôi, job dở được chạy lại sau khi restart | Translation | – | M | 003, 004 |
 | 007 | Toast khi bản dịch đã sẵn (issue mới), title tiếng Việt, bấm mở đúng issue | Notification | – | S | 006, ADR-0005 |
 | 008 | Trang issue: tiếng Việt và tiếng Nhật song song, có link sang GitHub, trạng thái "đang dịch" và "dịch lỗi" | Tracking | có | M | 006 |
 | 009 | Trang tình trạng tối thiểu: gh đã đăng nhập chưa, Claude CLI đã cấu hình chưa, lần poll cuối, số job lỗi; ghi log ra file local | vận hành | có | S | 005, 006 |

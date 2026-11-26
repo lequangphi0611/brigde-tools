@@ -16,6 +16,10 @@ Nguồn: `pnpm diagnose` chạy trên máy công ty, người dùng gõ lại k�
 
 **Kết luận tạm:** filter `updated:` chạy được và dựa trên updatedAt của item. Còn mở: comment vào issue có làm `item.updatedAt` đổi không? Nếu không thì filter bỏ sót, và poller phải lấy hết item rồi so `Issue.updatedAt` phía client (khoảng 3 trang × 100 item mỗi chu kỳ; GHES tắt rate limit nên chấp nhận được).
 
-## Lần 2 (cần chạy)
+## Lần 2 (2026-11-26)
+
+`filter miss` OK 0/N, nhưng trước khi chạy chưa có comment thử nào → chưa chứng minh được. Người dùng sẽ comment thử vào một issue (không đụng board) rồi chạy lại.
+
+## Lần 3 (cần chạy)
 
 Bản `diagnose` mới thêm `filter miss` (lấy toàn bộ item, so với kết quả filter), `issue>item`, và đo `updated time` với mốc lấy từ dữ liệu thật.

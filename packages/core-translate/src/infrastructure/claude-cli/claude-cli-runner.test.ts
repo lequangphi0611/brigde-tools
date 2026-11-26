@@ -68,7 +68,7 @@ describe("findEnvelope", () => {
 
 describe("checkCliConfig", () => {
   it("điền mặc định", () => {
-    expect(checkCliConfig({ command: "claude" })).toEqual({ ok: true, config: { command: "claude", args: [], timeoutSeconds: 120, concurrency: 2, maxInputChars: 30_000, env: {} } });
+    expect(checkCliConfig({ command: "claude" })).toEqual({ ok: true, config: { command: "claude", args: [], timeoutSeconds: 300, concurrency: 2, maxInputChars: 30_000, env: {} } });
   });
   it("từ chối tên biến môi trường không hợp lệ", () => {
     expect(checkCliConfig({ command: "claude", env: { "BAD-NAME": "x" } }).ok).toBe(false);
