@@ -23,7 +23,7 @@ node scripts/diagnose/index.mjs --owner <org> --number <số project>
 node scripts/diagnose/index.mjs --owner <org> --number <số project> --scheduler --toast
 ```
 
-Nếu đã `pnpm install` thì có thể dùng `pnpm diagnose -- --owner <org> --number <n>`.
+Nếu đã `pnpm install` thì có thể dùng `pnpm diagnose --owner <org> --number <n>`.
 
 | Cờ | Ý nghĩa |
 |---|---|
