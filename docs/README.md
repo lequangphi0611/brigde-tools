@@ -4,7 +4,7 @@ Tổ chức theo Domain-Driven Design. Đọc theo thứ tự khi mới vào d�
 
 | Thư mục | Nội dung | Ai cập nhật |
 |---|---|---|
-| `product/` | Vision, phạm vi, roadmap | Người, khi đổi hướng sản phẩm |
+| `product/` | Vision, phạm vi, lộ trình MVP theo story (`roadmap.md`) | Người, khi đổi hướng sản phẩm |
 | `domain/ubiquitous-language.md` | Từ điển thuật ngữ — code PHẢI dùng đúng tên ở đây | Agent `analyst` khi story đưa thêm khái niệm |
 | `domain/context-map.md` | Các bounded context và quan hệ | `analyst` / ADR |
 | `domain/bounded-contexts/<ctx>.md` | Aggregate, entity, value object, invariant, domain event, port | `analyst` (thiết kế), `implementer` (đồng bộ khi code lệch) |

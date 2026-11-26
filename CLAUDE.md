@@ -4,9 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Dự án
 
-GH Issue Translator: process Node chạy nền trên Windows, theo dõi GitHub Projects v2 tiếng Nhật, dịch issue/comment sang tiếng Việt bằng `claude -p` local, báo bằng toast Windows, UI đọc ở `localhost`. Vision, phạm vi, roadmap và câu hỏi mở: `docs/product/vision.md`. Giao tiếp với user bằng tiếng Việt.
+GH Issue Translator: process Node chạy nền trên Windows, theo dõi GitHub Projects v2 tiếng Nhật, dịch issue/comment sang tiếng Việt bằng `claude -p` local, báo bằng toast Windows, UI đọc ở `localhost`. Vision, phạm vi và câu hỏi mở: `docs/product/vision.md`. Lộ trình MVP theo mốc và story: `docs/product/roadmap.md`. Giao tiếp với user bằng tiếng Việt.
 
-Trạng thái hiện tại: khung + harness + runner Claude CLI (`packages/core-translate/src/infrastructure/claude-cli/`, ADR-0003). Adapter `Translator` thật, gh CLI, toast **chưa có** — roadmap bước 1 là spike hai điểm rủi ro đó trước khi viết tính năng phụ thuộc vào chúng.
+Trạng thái hiện tại: khung + harness + runner Claude CLI (`packages/core-translate/src/infrastructure/claude-cli/`, ADR-0003). Adapter `Translator` thật, gh CLI, toast **chưa có** — mốc M0 trong roadmap là spike các điểm rủi ro đó trên Windows trước khi viết tính năng phụ thuộc vào chúng.
 
 ## Lệnh
 
@@ -48,7 +48,7 @@ Chi tiết: `docs/architecture/testing-harness.md`.
 
 ## Workflow
 
-Tính năng mới đi qua skill `/feature <story | URL issue>` (`.claude/skills/feature/SKILL.md`), có cổng duyệt của user giữa các bước:
+Tính năng mới đi qua skill `/feature <số story trong roadmap | story | URL issue>` (`.claude/skills/feature/SKILL.md`), có cổng duyệt của user giữa các bước:
 
 1. `analyst` (opus) → `docs/features/NNN-slug/spec.md` theo `_template.md`
 2. Design: skill `design-brief` in prompt text để user tự dán vào Claude Design — **không lưu prompt vào repo**, chỉ lưu kết quả đã chốt vào mục UI của spec

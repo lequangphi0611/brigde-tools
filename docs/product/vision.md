@@ -19,15 +19,9 @@ Tool chạy nền trên Windows, theo dõi các GitHub Projects (v2) tiếng Nh�
 | Listen/unlisten | Toàn cục, project, issue | | Đồng bộ subscribe lên GitHub |
 | Lõi dịch | Package `core-translate` dùng chung với tool dịch chat | | |
 
-## Roadmap (theo thứ tự rủi ro)
+## Roadmap
 
-1. **Spike:** runner `claude -p` (đã có, ADR-0003) chạy từ process Task Scheduler; `gh api graphql` với `items(query: "updated:...")` + checklist `totalCount`.
-2. `core-translate`: `translate(text, from, to, context)`, glossary, giữ code block/link, cache theo hash.
-3. Poller + hàng đợi: 1 project cấu hình cứng, SQLite, toast.
-4. UI đọc: inbox, trang issue Việt | Nhật, đánh dấu đã đọc.
-5. Đa project + cấu hình từ UI.
-6. Listen/unlisten ba mức, dịch bù, "Dịch ngay".
-7. Giai đoạn 2: comment Việt → Nhật → post.
+Chi tiết theo mốc và story: [roadmap.md](roadmap.md).
 
 ## Câu hỏi mở (chưa chốt)
 

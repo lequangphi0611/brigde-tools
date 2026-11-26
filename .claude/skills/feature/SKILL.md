@@ -1,6 +1,6 @@
 ---
 name: feature
-description: Workflow điều phối một user story từ phân tích yêu cầu → design → khoá e2e → implement → verify → review → tạo PR. Dùng khi user gõ /feature <story hoặc URL GitHub issue>, hoặc nhờ làm một tính năng mới end-to-end. Hỗ trợ tiếp tục dở dang bằng /feature resume NNN.
+description: Workflow điều phối một user story (số story trong roadmap, text, hoặc URL issue) từ phân tích yêu cầu → design → khoá e2e → implement → verify → review → tạo PR. Dùng khi user gõ /feature <story hoặc URL GitHub issue>, hoặc nhờ làm một tính năng mới end-to-end. Hỗ trợ tiếp tục dở dang bằng /feature resume NNN.
 ---
 
 # Workflow /feature
@@ -20,8 +20,11 @@ Bạn (session chính) là **orchestrator**. Bạn không tự phân tích sâu 
 Mỗi khi chuyển bước, cập nhật mục "Workflow log" trong spec (bước, thời điểm, kết quả) để có thể `resume`.
 
 ## Bước 0 — Tiếp nhận
-1. Đầu vào là text story, URL GitHub issue (đọc bằng GitHub MCP), hoặc `resume NNN` (đọc spec + Workflow log, nhảy tới bước dở).
-2. `NNN` = số lớn nhất trong `docs/features/` + 1 (3 chữ số). `slug` = kebab-case tiếng Anh ngắn.
+1. Đầu vào là một trong:
+   - số story trong `docs/product/roadmap.md` (vd. `005`): lấy dòng đó làm user story, `NNN` = số đó; kiểm các story phụ thuộc đã ✅ chưa, chưa thì báo user trước;
+   - text story hoặc URL GitHub issue (đọc bằng GitHub MCP);
+   - `resume NNN` (đọc spec + Workflow log, nhảy tới bước dở).
+2. Story không có trong roadmap: `NNN` = số lớn nhất trong cả `docs/features/` và `roadmap.md` + 1 (3 chữ số), và thêm dòng vào roadmap. `slug` = kebab-case tiếng Anh ngắn.
 3. Branch: nếu đang ở `main` → `git checkout -b feature/NNN-slug`. Nếu môi trường chỉ định sẵn branch làm việc, dùng branch đó.
 4. Story mơ hồ tới mức không phân tích được (không rõ ai, làm gì) → hỏi user 1–3 câu trước, đừng giao analyst đoán.
 
@@ -56,7 +59,7 @@ Mỗi khi chuyển bước, cập nhật mục "Workflow log" trong spec (bướ
 - `should-fix`/`nit` → liệt kê cho user chọn sửa hay để lại.
 
 ## Bước 7 — PR
-1. Spec → `Trạng thái: done`; ADR Proposed liên quan → Accepted nếu user đồng ý.
+1. Spec → `Trạng thái: done`; đánh dấu ✅ story trong `docs/product/roadmap.md`; ADR Proposed liên quan → Accepted nếu user đồng ý.
 2. **GATE 4:** tóm tắt cho user: commits, kết quả verify, finding còn lại. Xác nhận trước khi push.
 3. `git push -u origin <branch>`. Tạo PR bằng GitHub MCP theo `.github/pull_request_template.md`: title `feat: <story> (NNN)`, body link spec, bảng AC→test, kết quả verify, finding còn lại. Base = `main`.
 4. Báo link PR cho user; hỏi có muốn theo dõi PR (CI/review) không.
