@@ -1,6 +1,6 @@
 # ADR-0004: Lưu trữ bằng `node:sqlite` có sẵn trong Node
 
-- Trạng thái: Proposed
+- Trạng thái: Accepted
 - Ngày: 2026-11-26
 
 ## Bối cảnh

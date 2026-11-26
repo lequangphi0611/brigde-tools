@@ -1,6 +1,6 @@
 # ADR-0005: Toast bằng PowerShell WinRT
 
-- Trạng thái: Proposed
+- Trạng thái: Accepted
 - Ngày: 2026-11-26
 
 ## Bối cảnh

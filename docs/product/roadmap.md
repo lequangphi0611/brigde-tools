@@ -35,8 +35,8 @@ Thiết kế phòng thủ vì không debug được trên máy thật: chỗ nà
 
 **Quyết định cần chốt khi hết M0:**
 - [x] github.com hay GHES → GHES qua `GH_HOST`
-- [ ] ADR-0004 (Proposed): `node:sqlite`, nâng Node máy thật lên ≥ 24.15 (chặn M2)
-- [ ] ADR-0005 (Proposed): PowerShell WinRT. Còn kiểm toast từ Task Scheduler (chặn 007)
+- [x] ADR-0004: `node:sqlite`; nâng Node máy thật lên ≥ 24.15
+- [x] ADR-0005: PowerShell WinRT. Còn kiểm toast từ Task Scheduler trước 007 (`diagnose --scheduler --toast`)
 - [ ] Hai giả định về listen/unlisten trong `vision.md` (chặn M5)
 
 **Xong khi:** dịch được một issue thật từ process do Task Scheduler chạy, và lấy được thay đổi của một project thật bằng một query.
