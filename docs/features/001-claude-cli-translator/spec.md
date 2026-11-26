@@ -54,7 +54,15 @@ Lợi ích phụ: code block không đi vào prompt → ít token, ít thời gi
 
 **Kiểm tra kết quả (chặt):** tập `id` trả về phải đúng bằng tập đã gửi (không thiếu, không thừa, không trùng); trong mỗi segment, mỗi chỗ giữ đã gửi phải xuất hiện **đúng một lần** và không có chỗ giữ lạ. Sai → `TranslationFailure("bad_output")`, không trả kết quả một phần. Retry là việc của 006.
 
-**Giới hạn đầu vào:** độ dài stdin thực sự gửi (sau khi che) > `maxInputChars` → `TranslationFailure("input_too_large")`, không chạy CLI. (Xem Câu hỏi mở 1.)
+**Giới hạn đầu vào và chia lô (Câu hỏi mở 1 đã chốt):** `maxInputChars` áp cho **stdin của từng lần gọi CLI** (sau khi che, gồm cả thẻ `<source>`/`<segment>` và khối `<context>`; khối `<context>` lặp lại ở mỗi lần gọi).
+- Stdin của cả request ≤ giới hạn → **đúng 1 lần gọi** (trường hợp thường).
+- Vượt giới hạn → adapter chia các segment cần gửi thành nhiều **lần gọi con**, xếp tham lam theo đúng thứ tự segment (thêm segment vào lần gọi hiện tại cho tới khi segment tiếp theo làm vượt giới hạn thì mở lần gọi mới). Một segment không bao giờ bị cắt đôi.
+- Các lần gọi con chạy **tuần tự**, không song song (giới hạn song song là việc của 006). Mỗi lần gọi con có `timeoutSeconds` riêng.
+- Kiểm tra trước khi gọi: nếu có segment mà riêng nó (kèm `<context>`) đã vượt giới hạn → `TranslationFailure("input_too_large")`, **không chạy CLI lần nào**.
+- Một lần gọi con lỗi (mọi `reason`) → cả request lỗi với `reason` đó, không chạy các lần gọi con còn lại, không trả kết quả một phần.
+- Id trong prompt (`s1`, `s2`, …) duy nhất trong cả request. Mỗi lần gọi con phải trả đúng tập id của chính lần gọi đó (kiểm tra chặt như bên dưới).
+- Kết quả gộp giữ thứ tự segment của request. `model` = model của lần gọi con đầu tiên.
+- Hệ quả cho 006: một issue rất dài có thể mất N × ~100 giây; job chiếm một slot suốt thời gian đó.
 
 **Đoạn rỗng:** segment rỗng/chỉ khoảng trắng hoặc sau khi che chỉ còn chỗ giữ + khoảng trắng → không gửi, kết quả = text gốc. Không còn segment nào cần gửi → không chạy CLI, `model = null`.
 
@@ -64,7 +72,11 @@ Lợi ích phụ: code block không đi vào prompt → ít token, ít thời gi
 
 ## Acceptance criteria
 
-Tất cả AC dưới đây kiểm bằng Vitest. Test adapter dùng `fake-claude-cli.mjs` làm `command` (không gọi AI thật). Fake cần thêm (gợi ý tên mode): trả `segments` = `"[vi] " + nội dung từng <segment>` khi stdin có `<segment`; `batch-missing` (bỏ segment cuối), `batch-extra` (thêm id lạ), `batch-drop-placeholder` (xoá `⟦1⟧` đầu tiên), `batch-result-text` (JSON nằm trong `result`, không có `structured_output`).
+Tất cả AC dưới đây kiểm bằng Vitest. Test adapter dùng `fake-claude-cli.mjs` làm `command` (không gọi AI thật). Fake cần thêm (gợi ý tên):
+- Trả `segments` = `"[vi] " + nội dung từng <segment>` khi stdin có `<segment`.
+- Mode `batch-missing` (bỏ segment cuối), `batch-extra` (thêm id lạ), `batch-drop-placeholder` (xoá `⟦1⟧` đầu tiên), `batch-result-text` (JSON nằm trong `result`, không có `structured_output`).
+- `--fake-fail-on <n>`: lần gọi thứ n (đếm theo số dòng trong file record) thoát lỗi như mode `fail`.
+- `--fake-lock <file>`: lúc bắt đầu tạo file độc quyền (`wx`), xoá khi kết thúc; nếu file đã có (đang có lần gọi khác chạy) thì thoát lỗi → phát hiện được gọi song song. Ghi thêm `startedAt`/`endedAt` vào record.
 
 ```gherkin
 Scenario: AC-1 Cả issue đi trong một lần gọi CLI
@@ -159,14 +171,41 @@ Scenario: AC-14 Request sai là lỗi lập trình, không gọi CLI
   When translate
   Then ném lỗi (không phải TranslationFailure) và fake CLI không được chạy
 
-Scenario: AC-15 Quá maxInputChars thì từ chối trước khi chạy CLI, tính sau khi che
+Scenario: AC-15 Một segment đơn lẻ quá maxInputChars thì từ chối, không chạy CLI lần nào; độ dài tính sau khi che
   Given maxInputChars = 1000
-  And một segment 1200 ký tự tiếng Nhật
+  And request có segment "title" 100 ký tự tiếng Nhật và segment "body" 1200 ký tự tiếng Nhật
   When translate
-  Then ném TranslationFailure reason "input_too_large" và fake CLI không được chạy
+  Then ném TranslationFailure reason "input_too_large" và fake CLI không được chạy lần nào (kể cả cho "title")
   Given một segment gồm code block 5000 ký tự + 50 ký tự tiếng Nhật
   When translate
-  Then thành công (code block không tính vào độ dài gửi đi)
+  Then thành công trong 1 lần gọi (code block không tính vào độ dài gửi đi)
+
+Scenario: AC-22 Request vừa giới hạn chỉ gọi CLI một lần
+  Given maxInputChars = 1000
+  And 3 segment, mỗi segment 250 ký tự tiếng Nhật (stdin cả request ≤ 1000)
+  When translate
+  Then fake CLI được chạy đúng 1 lần, stdin có đủ 3 <segment>
+  And mọi stdin đã ghi nhận có độ dài ≤ 1000
+
+Scenario: AC-23 Request vượt giới hạn được chia thành nhiều lần gọi tuần tự, giữ thứ tự
+  Given maxInputChars = 1000
+  And 4 segment "title", "body", "comment:A", "comment:B", mỗi segment 400 ký tự tiếng Nhật
+  When translate với fake CLI mode slow (--fake-delay 300) và --fake-lock
+  Then fake CLI được chạy 2 lần; lần 1 có <segment> của "title", "body"; lần 2 có "comment:A", "comment:B"
+  And mỗi stdin có độ dài ≤ 1000, không segment nào bị cắt đôi
+  And không lần gọi nào lỗi vì lock (startedAt của lần 2 ≥ endedAt của lần 1)
+  And kết quả có 4 segment đúng thứ tự "title", "body", "comment:A", "comment:B", mỗi segment = "[vi] " + text gốc
+  And id trong prompt không trùng giữa hai lần gọi
+  And nếu context.hint có thì cả hai stdin đều có cùng khối <context>
+
+Scenario: AC-24 Một lần gọi con lỗi thì cả request lỗi, không gọi tiếp, không trả một phần
+  Given cùng request như AC-23 và có thêm segment "comment:C" 400 ký tự (cần 3 lần gọi)
+  And fake CLI --fake-fail-on 2
+  When translate
+  Then ném TranslationFailure reason "process_failed"
+  And fake CLI được chạy đúng 2 lần (lần 3 không chạy)
+  Given fake CLI mode batch-missing chỉ ở lần gọi con thứ 2 (hoặc bất kỳ lần gọi con nào)
+  Then ném TranslationFailure reason "bad_output"
 
 Scenario: AC-16 Model trả thiếu, thừa segment hoặc sai schema → bad_output, không trả một phần
   Given fake CLI mode batch-missing | batch-extra | garbage
@@ -210,7 +249,9 @@ Scenario: AC-21 FakeTranslator theo port mới, giữ hợp đồng "[vi] " + te
 |---|---|---|
 | AC-3 … AC-9 (phần che/khôi phục) | unit (domain thuần) | `packages/core-translate/src/domain/protected-spans.test.ts` |
 | AC-8, AC-10, AC-11 (dựng prompt) | unit (thuần) | `packages/core-translate/src/infrastructure/claude-cli/translation-prompt.test.ts` |
-| AC-1 … AC-9, AC-11 … AC-20 (đầu-cuối adapter) | adapter test, Vitest + `fake-claude-cli.mjs` | `packages/core-translate/src/infrastructure/claude-cli/claude-cli-translator.test.ts` |
+| AC-15, AC-22, AC-23 (thuật toán chia lô, phần thuần) | unit (thuần) | `packages/core-translate/src/infrastructure/claude-cli/translation-prompt.test.ts` (hoặc file `chunking.test.ts` riêng) |
+| AC-1 … AC-9, AC-11 … AC-20, AC-22 … AC-24 (đầu-cuối adapter) | adapter test, Vitest + `fake-claude-cli.mjs` | `packages/core-translate/src/infrastructure/claude-cli/claude-cli-translator.test.ts` |
+| Mẫu dịch theo lô trong diagnose (bước 8) | unit (logic thuần của diagnose) | `scripts/diagnose/checks.test.ts` |
 | AC-1, AC-12, AC-13, AC-14, AC-21 (hợp đồng chung fake ↔ thật, ADR-0002) | unit, một bộ case chạy cho cả hai | `packages/core-translate/src/application/translator.contract.ts` + gọi từ `fake-translator.test.ts` và `claude-cli-translator.test.ts` |
 | (không có) | e2e | — xem "Đề xuất về e2e" |
 
@@ -220,7 +261,7 @@ Story này không có hành vi người dùng thấy được: app chưa gọi `
 ## Tác động domain
 - Thuật ngữ mới (→ `ubiquitous-language.md`, đã thêm): `TranslationSegment` (Đoạn dịch), `TranslationRequest` (Yêu cầu dịch), `ProtectedSpan` (Phần giữ nguyên), chỗ giữ `⟦N⟧` (`placeholder`), `TranslationFailure` (Lỗi dịch).
 - Aggregate / invariant / event thay đổi: không đổi aggregate. Invariant mới của port: kết quả có đúng tập id của request; phần giữ nguyên trả lại nguyên văn; không có kết quả một phần. Ghi trong `bounded-contexts/translation.md`.
-- Port mới hoặc đổi: `Translator.translate(text, direction, context): Promise<string>` → `translate(request: TranslationRequest): Promise<TranslationResult>`; thêm `TranslationFailure`. Người dùng duy nhất trong repo là `composition-root.ts` (chỉ khởi tạo `FakeTranslator`) → đổi rẻ trong repo này; tool dịch chat dùng chung cần cập nhật (Câu hỏi mở 4).
+- Port mới hoặc đổi: `Translator.translate(text, direction, context): Promise<string>` → `translate(request: TranslationRequest): Promise<TranslationResult>`; thêm `TranslationFailure`. Người dùng duy nhất trong repo là `composition-root.ts` (chỉ khởi tạo `FakeTranslator`). Tool dịch chat dùng chung chưa được dựng (Câu hỏi mở 4) → đổi port tự do, không cần hàm bọc một chuỗi.
 - ADR cần viết: `docs/architecture/adr/0006-translator-batch-port.md` (Proposed, đã viết nháp).
 
 ## UI (nếu có)
@@ -230,8 +271,11 @@ Không có.
 - Render glossary vào prompt, gộp glossary hai tầng (002). Port giữ trường `context.glossary`; adapter 001 bỏ qua.
 - Cache bản dịch (003), hàng đợi bền, retry, giới hạn 2 job song song, ưu tiên (006).
 - Lắp `ClaudeCliTranslator` vào `composition-root.ts` cho chế độ thật (chế độ thật cần cả `GhCliGateway`, toast; làm khi có 005/006).
-- Tự chia issue quá dài thành nhiều lần gọi (Câu hỏi mở 1).
-- Bỏ qua lần gọi khi nội dung không có chữ Nhật (Câu hỏi mở 2).
+- Gọi song song các lần gọi con khi chia lô (luôn tuần tự; song song do 006 quản).
+- Cắt một segment đơn lẻ quá dài thành nhiều phần: segment quá giới hạn thì từ chối (`input_too_large`).
+- Bỏ qua lần gọi khi nội dung không có chữ Nhật (Câu hỏi mở 2: không làm ở story này).
+- Hàm bọc kiểu `translateText(text, …)` cho tool dịch chat (Câu hỏi mở 4: chưa cần).
+- Kiểm chỗ giữ kiểu mềm (Câu hỏi mở 5: chọn chặt).
 - Giữ nguyên `#123`, `org/repo#123`, SHA commit, bảng markdown, HTML khác (`<details>`, `<img>`): không che, dựa vào model.
 - Chữ trong ảnh, field của Project (theo vision).
 
@@ -240,14 +284,18 @@ Không có.
 - **`--json-schema` với mảng object lồng nhau** trên Claude Code 2.1.329: spike mới kiểm schema phẳng `{ translation }`. Runner đã có dự phòng đọc JSON trong `result` (AC-18). Kiểm chứng cùng lần diagnose ở trên.
 - **Hook `UserPromptSubmit` của công ty** nhận cả stdin (spike S0.1): nếu hook sửa prompt, chỗ giữ/thẻ có thể lệch → lỗi `bad_output`. Đã chấp nhận ở spike; `detail` trong log giúp nhận ra.
 - **Nhận diện markdown bằng tay** dễ sai biên (fence lồng, backtick trong link…). Implementer chọn: scanner tự viết cho đúng 6 loại ở trên, hoặc thêm `mdast-util-from-markdown` + GFM (có offset vị trí) vào core-translate. Thêm dependency vào package dùng chung phải ghi lý do trong commit. Dù chọn gì, AC-3…AC-9 là chuẩn.
+- **Chia lô làm mất ngữ cảnh giữa các lần gọi con:** comment ở lần gọi 2 không thấy title/body. Chấp nhận (chỉ xảy ra với issue > ~30 000 ký tự sau khi che, hiếm); `hint` vẫn lặp lại ở mọi lần gọi. Bên gọi (006) có thể đặt title vào `hint`.
+- **Thời gian:** issue cần N lần gọi con mất N × ~100 giây, có thể vượt kỳ vọng của 006/008 ("đang dịch" lâu). Không có timeout tổng trong adapter; mỗi lần gọi con có `timeoutSeconds` riêng.
 - **Che quá tay** làm mất ngữ cảnh: model không thấy code nên câu "下記のエラー" có thể dịch kém hơn. Chấp nhận; xem lại khi dùng thật ở M2.
 
 ## Câu hỏi mở
-- [ ] 1. Issue vượt `maxInputChars` (mặc định 30 000, tính sau khi che): story này đề xuất **từ chối** (`input_too_large`, 006 đánh dấu job lỗi rõ ràng). Phương án khác: adapter tự chia các segment thành nhiều lần gọi tuần tự (mỗi lần ≤ giới hạn; một segment đơn lẻ quá giới hạn vẫn từ chối) — thêm khoảng nửa ngày. Chọn từ chối (mặc định) hay chia?
-- [ ] 2. Nếu mọi segment cần gửi đều không có ký tự tiếng Nhật (kana/kanji), có bỏ qua lần gọi (~100 giây) và trả text gốc không? Đề xuất: **chưa làm** ở 001, xem lại ở M2 khi có số liệu thật.
-- [ ] 3. Có thêm kiểm tra "dịch theo lô" vào `pnpm diagnose` trong story này (bước 8 của kế hoạch) để kiểm chứng chỗ giữ và schema mảng trên máy thật không? Đề xuất: **có**, vì là đường duy nhất kiểm được model thật mà không mang dữ liệu công ty ra.
-- [ ] 4. Tool dịch chat dùng chung `core-translate` có đang gọi `Translator.translate(text, …)` không? Nếu có, đổi port là breaking change cho nó; có cần giữ một hàm tiện ích `translateText(translator, text, direction, context)` bọc lô một segment không?
-- [ ] 5. Kiểm tra chỗ giữ **chặt** (mất/thừa → lỗi cả lần gọi) như AC-17, hay **mềm** (chỗ giữ bị mất thì nối phần giữ nguyên vào cuối segment, ghi log)? Đề xuất chặt cho 001; đổi sang mềm nếu diagnose/dùng thật cho thấy model hay làm mất.
+- [x] 1. Issue vượt `maxInputChars`? → **User chốt: adapter tự chia** các segment thành nhiều lần gọi CLI tuần tự, mỗi lần ≤ giới hạn, giữ thứ tự; segment đơn lẻ vẫn quá giới hạn → `input_too_large`, không chạy CLI; một lần gọi con lỗi → cả request lỗi. (AC-15, AC-22, AC-23, AC-24)
+- [x] 2. Bỏ qua lần gọi khi không có chữ Nhật? → **User chốt: không làm** ở story này (Ngoài phạm vi).
+- [x] 3. Thêm kiểm tra dịch theo lô vào `pnpm diagnose`? → **Quyết định mặc định (user chưa trả lời rõ, orchestrator giữ theo đề xuất): có.** Mẫu cố định, không phải dữ liệu công ty, chỉ in `OK` / `PLACEHOLDER_MISMATCH n` / `MISSING_SEGMENT` / `NO_SEGMENTS`. User có thể bỏ trước khi implement; khi đó bỏ bước 9.
+- [x] 4. Tool dịch chat có gọi port cũ không? → **User chốt: tool dịch chat chưa được dựng**, đổi port tự do, không cần hàm bọc.
+- [x] 5. Kiểm chỗ giữ chặt hay mềm? → **User chốt: chặt** (AC-17).
+
+Không còn câu hỏi mở.
 
 ## Kế hoạch implement
 (Implementer làm theo thứ tự, mỗi bước một commit `feat(translation): … (001)`. Không sửa `e2e/specs/**`.)
@@ -255,12 +303,17 @@ Không có.
 2. **Domain: vô hiệu hoá thẻ giả.** Thêm nhận diện thẻ `source|segment|context` (ASCII + toàn chiều rộng) vào `protect`. Test phần thuần của AC-8.
 3. **Application: port mới.** Đổi `translator.port.ts` sang `TranslationRequest`/`TranslationResult`/`TranslationFailure`; kiểm request (AC-14). Viết bộ hợp đồng `translator.contract.ts` (AC-1 hình dạng kết quả, AC-12, AC-13, AC-14). Cập nhật `FakeTranslator` (AC-21) và chạy bộ hợp đồng cho fake. Cập nhật `index.ts` exports; `composition-root.ts` vẫn compile. Kiểm chứng: `pnpm typecheck && pnpm test`.
 4. **Infrastructure: dựng prompt.** `infrastructure/claude-cli/translation-prompt.ts`: system prompt theo direction, schema `{ segments }`, dựng stdin (`<context>`, `<source>`, `<segment id="sK">`), map sK ↔ id. Test AC-8, AC-10, AC-11 trên chuỗi.
-5. **Fake CLI.** Mở rộng `fake-claude-cli.mjs`: trả `segments` khi stdin có `<segment`; mode `batch-missing`, `batch-extra`, `batch-drop-placeholder`, `batch-result-text`. Test runner hiện có vẫn xanh (mode `ok` với `<source>` không có `<segment>` giữ hành vi cũ).
-6. **Infrastructure: `ClaudeCliTranslator`.** `infrastructure/claude-cli/claude-cli-translator.ts`: `loadCliConfig` mỗi lần → che → bỏ đoạn rỗng → kiểm `maxInputChars` → `runClaudeCli` → validate zod → kiểm id + chỗ giữ → khôi phục; map `CliRunFailure` → `TranslationFailure`. Test AC-1, AC-2, AC-12…AC-20 với fake CLI; chạy bộ hợp đồng.
-7. **Export + docs.** Export `ClaudeCliTranslator`, `TranslationFailure` từ `index.ts`; cập nhật mục Hệ quả của ADR-0003 trỏ sang ADR-0006 nếu cần. `pnpm verify` xanh (e2e smoke không đổi).
-8. **(Nếu Câu hỏi mở 3 = có) diagnose.** Thêm dòng `claude batch` vào `scripts/diagnose` (Node thuần, không import TS): mẫu cố định 2 segment, schema `{ segments }`, in `OK` / `PLACEHOLDER_MISMATCH n` / `MISSING_SEGMENT` / `NO_SEGMENTS`. Logic thuần trong `checks.mjs` + `checks.test.ts`. Cập nhật `docs/spikes/diagnose.md`.
+5. **Infrastructure: chia lô (thuần).** Hàm nhận các segment đã che + hint + `maxInputChars`, trả danh sách lô (mỗi lô là stdin ≤ giới hạn, giữ thứ tự, id sK duy nhất toàn request) hoặc `input_too_large` nếu một segment riêng lẻ đã vượt. Test phần thuần của AC-15, AC-22, AC-23 (độ dài stdin, cách xếp lô, không cắt segment).
+6. **Fake CLI.** Mở rộng `fake-claude-cli.mjs`: trả `segments` khi stdin có `<segment`; mode `batch-missing`, `batch-extra`, `batch-drop-placeholder`, `batch-result-text`; cờ `--fake-fail-on <n>`, `--fake-lock <file>`, ghi `startedAt`/`endedAt`. Test runner hiện có vẫn xanh (mode `ok` với `<source>` không có `<segment>` giữ hành vi cũ).
+7. **Infrastructure: `ClaudeCliTranslator`.** `infrastructure/claude-cli/claude-cli-translator.ts`: `loadCliConfig` mỗi lần → che → bỏ đoạn rỗng → chia lô (từ chối nếu quá giới hạn) → với từng lô **tuần tự**: `runClaudeCli` → validate zod → kiểm id + chỗ giữ; lỗi thì dừng → khôi phục và gộp theo thứ tự; map `CliRunFailure` → `TranslationFailure`. Test AC-1, AC-2, AC-12…AC-20, AC-22…AC-24 với fake CLI; chạy bộ hợp đồng.
+8. **Export + docs.** Export `ClaudeCliTranslator`, `TranslationFailure` từ `index.ts`; cập nhật mục Hệ quả của ADR-0003 trỏ sang ADR-0006 nếu cần. `pnpm verify` xanh (e2e smoke không đổi).
+9. **Diagnose: mẫu dịch theo lô (quyết định mặc định của Câu hỏi mở 3).** Thêm dòng `claude batch` vào `scripts/diagnose` (Node thuần, không import TS): mẫu cố định 2 segment có code block, link, mention đã che sẵn bằng `⟦N⟧`, schema `{ segments }`; in `OK` / `PLACEHOLDER_MISMATCH n` / `MISSING_SEGMENT` / `NO_SEGMENTS`, không in nội dung ngoài mẫu. Logic thuần trong `checks.mjs` + `checks.test.ts`. Cập nhật `docs/spikes/diagnose.md`. Bước này độc lập với 1–8; nếu cần tách story thì tách bước này ra trước (xem Cỡ).
+
+## Cỡ
+Ước lượng sau khi thêm chia lô: bước 1–2 (nhận diện markdown) khoảng nửa ngày, là phần rủi ro nhất; bước 3–8 khoảng nửa ngày tới hơn nửa ngày (chia lô thêm khoảng 2–3 giờ gồm fake lock/fail-on); bước 9 khoảng 1–2 giờ. Tổng **vượt M một chút (khoảng 1,25–1,5 ngày)**. Không tự tách. Nếu muốn giữ M, đề xuất tách bước 9 (diagnose) thành việc riêng kiểu M0 (không cần đi qua `/feature`, không phụ thuộc code TS), làm trước hoặc song song. Phần lõi (bước 1–8) nên giữ nguyên một story vì AC chia lô, che và hợp đồng phụ thuộc lẫn nhau.
 
 ## Workflow log
 | Bước | Thời điểm | Kết quả |
 |---|---|---|
 | 1 Phân tích | 2026-11-26 | Spec draft; đề xuất bỏ bước e2e; 5 câu hỏi mở |
+| 1 Phân tích (lần 2) | 2026-11-26 | User trả lời câu hỏi mở: tự chia lô tuần tự, không bỏ qua khi không có chữ Nhật, diagnose dịch theo lô (mặc định có), đổi port tự do, kiểm chỗ giữ chặt. Thêm AC-22…AC-24, sửa AC-15; 24 AC; cỡ hơi vượt M; không còn câu hỏi mở |

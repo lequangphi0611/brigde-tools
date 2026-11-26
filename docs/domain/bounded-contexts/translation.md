@@ -15,6 +15,7 @@ Package độc lập, dùng chung với tool dịch chat Việt↔Nhật. **Khô
 - Prompt có glossary (từ 002) + ngữ cảnh (`hint`).
 - **Invariant của port:** kết quả có đúng tập id của request (không thiếu, thừa, trùng); mỗi chỗ giữ đã gửi xuất hiện đúng một lần trong đoạn tương ứng; sai thì `TranslationFailure("bad_output")`, không trả kết quả một phần.
 - Đoạn rỗng hoặc chỉ gồm phần giữ nguyên không được gửi; không còn gì để gửi thì không gọi engine.
+- Yêu cầu vượt `maxInputChars` (tính trên stdin sau khi che) → adapter chia thành nhiều lần gọi con **tuần tự**, không cắt đôi đoạn, giữ thứ tự; đoạn đơn lẻ quá dài → `input_too_large` trước khi gọi; một lần gọi con lỗi → cả yêu cầu lỗi.
 
 ## Ports
 - `Translator.translate(request: TranslationRequest): Promise<TranslationResult>` (ADR-0006, story 001; trước đó là `translate(text, direction, context)`) — adapter thật `ClaudeCliTranslator` dùng runner `infrastructure/claude-cli/` theo ADR-0003: không shell, nội dung qua stdin, cwd tạm rỗng, model không có tool, output JSON theo schema.
