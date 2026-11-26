@@ -136,3 +136,51 @@ export function isoDay(d) {
 export function isoSecond(d) {
   return d.toISOString().replace(/\.\d{3}Z$/, "Z");
 }
+
+/**
+ * Chọn claude từ output `where claude` (Windows). Node không spawn được .cmd/.ps1/shim không đuôi khi không có shell:
+ * ưu tiên .exe; nếu chỉ có bản npm (.cmd) thì dùng node + cli.js.
+ */
+export function chooseClaude(whereLines, win = true) {
+  const lines = whereLines.map((l) => l.trim()).filter(Boolean);
+  if (!win) return lines[0] ? { kind: "exe", path: lines[0] } : undefined;
+  const exe = lines.find((l) => /\.exe$/i.test(l));
+  if (exe) return { kind: "exe", path: exe };
+  const cmd = lines.find((l) => /\.cmd$/i.test(l));
+  if (cmd) return { kind: "npm", path: cmd };
+  return lines[0] ? { kind: "other", path: lines[0] } : undefined;
+}
+
+/**
+ * So kết quả filter `updated:>D` với toàn bộ item. `safeMarkIso` cách D đủ xa (≥ 1 ngày) để lệch múi giờ của server
+ * không ảnh hưởng: Issue cập nhật sau mốc này mà filter không trả = filter bỏ sót thật.
+ */
+export function analyzeFilter(allNodes, returnedIds, safeMarkIso) {
+  const mark = Date.parse(safeMarkIso);
+  const returned = new Set(returnedIds);
+  let issuesAfter = 0, missed = 0, missedItemStale = 0;
+  for (const n of allNodes) {
+    if (!n.content || n.content.__typename !== "Issue") continue;
+    if (Date.parse(n.content.updatedAt) < mark) continue;
+    issuesAfter++;
+    if (!returned.has(n.id)) {
+      missed++;
+      if (Date.parse(n.updatedAt) < mark) missedItemStale++;
+    }
+  }
+  return { issuesAfter, missed, missedItemStale };
+}
+
+/** Item có `updatedAt` > iso (đếm phía client, làm chuẩn để so với server). */
+export function countAfter(nodes, iso) {
+  const t = Date.parse(iso);
+  return nodes.filter((n) => Date.parse(n.updatedAt) > t).length;
+}
+
+/** Mốc thời gian để thử độ chi tiết giờ/phút: ngay trước item mới thứ k, lấy từ dữ liệu thật. */
+export function pickTimeProbe(nodes, k = 5) {
+  const times = nodes.map((n) => Date.parse(n.updatedAt)).filter(Number.isFinite).sort((a, b) => b - a);
+  if (times.length === 0) return undefined;
+  const t = times[Math.min(k, times.length) - 1] - 1000;
+  return isoSecond(new Date(t));
+}

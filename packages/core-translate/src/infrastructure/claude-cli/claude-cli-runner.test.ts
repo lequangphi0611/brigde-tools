@@ -12,9 +12,9 @@ const dir = mkdtempSync(join(tmpdir(), "ghit-cli-test-"));
 const schema = { type: "object", properties: { translation: { type: "string" } }, required: ["translation"] };
 const SYSTEM = "translate";
 
-function setup(mode: string, timeoutSeconds = 30) {
+function setup(mode: string, timeoutSeconds = 30, env?: Record<string, string>) {
   const record = join(dir, `${mode}-${Math.random()}.jsonl`);
-  const config = { command: process.execPath, args: [FAKE, "--fake-mode", mode, "--fake-record", record], timeoutSeconds };
+  const config = { command: process.execPath, args: [FAKE, "--fake-mode", mode, "--fake-record", record], timeoutSeconds, ...(env ? { env } : {}) };
   const calls = () => readFileSync(record, "utf8").trim().split("\n").map((l) => JSON.parse(l));
   return { run: (stdin: string) => runClaudeCli({ config, schema, systemPrompt: SYSTEM, stdin }), calls };
 }
@@ -30,6 +30,12 @@ describe("runClaudeCli", () => {
     expect(call.argv.join(" ")).not.toContain("バグ");
     expect(call.stdin).toBe(text); // UTF-8 tiếng Nhật đi nguyên vẹn
     expect(call.cwd).toMatch(/ghit-ai-/);
+  });
+
+  it("truyền biến môi trường trong config cho process CLI", async () => {
+    const { run, calls } = setup("ok", 30, { FAKE_ENV_PROBE: "C:\\claude\\settings.json" });
+    await run("<source>a</source>");
+    expect(calls()[0].envProbe).toBe("C:\\claude\\settings.json");
   });
 
   it("đọc được envelope khi script bọc in log trước", async () => {
@@ -62,7 +68,10 @@ describe("findEnvelope", () => {
 
 describe("checkCliConfig", () => {
   it("điền mặc định", () => {
-    expect(checkCliConfig({ command: "claude" })).toEqual({ ok: true, config: { command: "claude", args: [], timeoutSeconds: 120, concurrency: 2, maxInputChars: 30_000 } });
+    expect(checkCliConfig({ command: "claude" })).toEqual({ ok: true, config: { command: "claude", args: [], timeoutSeconds: 300, concurrency: 2, maxInputChars: 30_000, env: {} } });
+  });
+  it("từ chối tên biến môi trường không hợp lệ", () => {
+    expect(checkCliConfig({ command: "claude", env: { "BAD-NAME": "x" } }).ok).toBe(false);
   });
   it("từ chối cờ cấp tool hoặc cờ app tự đặt", () => {
     expect(checkCliConfig({ command: "claude", args: ["--dangerously-skip-permissions"] })).toMatchObject({ ok: false });

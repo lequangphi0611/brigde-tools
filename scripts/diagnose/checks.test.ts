@@ -57,3 +57,27 @@ describe("diagnose checks", () => {
     expect(c.hasProjectScope("  - Token scopes: 'gist', 'read:org', 'repo'")).toBe(false);
   });
 });
+
+describe("diagnose: chọn claude và phân tích filter", () => {
+  it("ưu tiên .exe, rồi bản npm, bỏ shim không đuôi", () => {
+    expect(c.chooseClaude(["C:\\npm\\claude", "C:\\npm\\claude.cmd", "C:\\bin\\claude.exe"])).toEqual({ kind: "exe", path: "C:\\bin\\claude.exe" });
+    expect(c.chooseClaude(["C:\\npm\\claude", "C:\\npm\\claude.cmd"])).toEqual({ kind: "npm", path: "C:\\npm\\claude.cmd" });
+    expect(c.chooseClaude([])).toBeUndefined();
+  });
+
+  it("đếm issue cập nhật sau mốc mà filter không trả", () => {
+    const all = [
+      { id: "a", updatedAt: "2026-11-25T00:00:00Z", content: { __typename: "Issue", updatedAt: "2026-11-25T00:00:00Z" } },
+      { id: "b", updatedAt: "2026-10-01T00:00:00Z", content: { __typename: "Issue", updatedAt: "2026-11-25T00:00:00Z" } },
+      { id: "c", updatedAt: "2026-10-01T00:00:00Z", content: { __typename: "Issue", updatedAt: "2026-10-01T00:00:00Z" } },
+    ];
+    expect(c.analyzeFilter(all, ["a"], "2026-11-21T00:00:00Z")).toEqual({ issuesAfter: 2, missed: 1, missedItemStale: 1 });
+  });
+
+  it("chọn mốc giờ từ dữ liệu và đếm phía client", () => {
+    const nodes = ["2026-11-26T10:00:00Z", "2026-11-26T09:00:00Z", "2026-11-20T00:00:00Z"].map((updatedAt) => ({ updatedAt }));
+    const probe = c.pickTimeProbe(nodes, 2);
+    expect(probe).toBe("2026-11-26T08:59:59Z");
+    expect(c.countAfter(nodes, probe)).toBe(2);
+  });
+});

@@ -8,9 +8,11 @@ const CliConfigSchema = z.object({
   /** Đường dẫn TUYỆT ĐỐI tới `claude.exe` hoặc `node` (kèm cli.js ở đầu args). Task Scheduler không có PATH của terminal. */
   command: z.string().trim().min(1),
   args: z.array(z.string()).max(50).default([]),
-  timeoutSeconds: z.number().int().min(10).max(1800).default(120),
+  timeoutSeconds: z.number().int().min(10).max(1800).default(300), // gateway/model custom có thể mất ~100s mỗi lần
   concurrency: z.number().int().min(1).max(4).default(2),
   maxInputChars: z.number().int().min(100).max(200_000).default(30_000),
+  /** Biến môi trường thêm cho process CLI (vd. settings riêng, proxy, CA). Task Scheduler không có profile của terminal. */
+  env: z.record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/), z.string()).default({}),
 });
 
 export type CliConfig = z.infer<typeof CliConfigSchema>;
