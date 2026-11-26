@@ -101,7 +101,7 @@ export function readCliResult(stdout: string): { body: unknown; model: string | 
 }
 
 export interface RunClaudeCliInput {
-  config: Pick<CliConfig, "command" | "args" | "timeoutSeconds">;
+  config: Pick<CliConfig, "command" | "args" | "timeoutSeconds"> & Partial<Pick<CliConfig, "env">>;
   schema: object;
   systemPrompt: string;
   /** Toàn bộ user prompt. Chỉ đi qua stdin. */
@@ -113,18 +113,18 @@ export async function runClaudeCli(input: RunClaudeCliInput): Promise<{ body: un
   const { config } = input;
   const cwd = await mkdtemp(join(tmpdir(), "ghit-ai-"));
   try {
-    const stdout = await run(config.command, [...config.args, ...fixedArgs(input.schema, input.systemPrompt)], input.stdin, cwd, config.timeoutSeconds * 1000);
+    const stdout = await run(config.command, [...config.args, ...fixedArgs(input.schema, input.systemPrompt)], input.stdin, cwd, config.timeoutSeconds * 1000, config.env ?? {});
     return readCliResult(stdout);
   } finally {
     await rm(cwd, { recursive: true, force: true });
   }
 }
 
-function run(command: string, args: string[], stdin: string, cwd: string, timeoutMs: number): Promise<string> {
+function run(command: string, args: string[], stdin: string, cwd: string, timeoutMs: number, env: Record<string, string>): Promise<string> {
   return new Promise((resolve, reject) => {
     let child;
     try {
-      child = spawn(command, args, { cwd, shell: false, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+      child = spawn(command, args, { cwd, env: { ...process.env, ...env }, shell: false, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
     } catch {
       reject(new CliRunFailure("process_failed", START_FAILED));
       return;

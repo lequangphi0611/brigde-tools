@@ -34,8 +34,25 @@ Nếu đã `pnpm install` thì có thể dùng `pnpm diagnose --owner <org> --nu
 | `--model <name>` | Model khi không dùng config (mặc định `sonnet`) |
 | `--scheduler` | Tạo task tạm, chạy lại phần Claude trong Task Scheduler, rồi tự xoá task |
 | `--toast` | Hiện toast thử và hỏi y/n |
+| `--write-config` | Ghi `config/claude-cli.local.json` từ claude tìm được (không ghi đè file đã có) |
 | `--skip-claude` | Bỏ qua phần Claude |
 | `--raw` | In lỗi gốc (chỉ tự đọc) |
 | `--out <file>` | Ghi kết quả ra file |
+
+## Claude với settings riêng
+
+Lệnh chạy claude từ một thư mục tạm rỗng và **không đọc alias/function trong profile PowerShell**. Task Scheduler cũng không đọc, nên mọi thiết lập riêng phải nằm trong `config/claude-cli.local.json`:
+
+```json
+{
+  "command": "C:\\Users\\<you>\\.local\\bin\\claude.exe",
+  "args": ["--model", "sonnet", "--settings", "C:\\path\\to\\settings.json"],
+  "env": { "TEN_BIEN": "giá trị" }
+}
+```
+
+- `command` phải là `claude.exe`. Nếu cài qua npm thì đặt `command` là `node.exe` và phần tử đầu của `args` là đường dẫn tới `...\\node_modules\\@anthropic-ai\\claude-code\\cli.js`. Không dùng `.cmd`/`.ps1`. Chạy `--write-config` để lệnh tự dò đường dẫn.
+- `--settings <file>` dùng cho file settings riêng, `env` cho biến môi trường (proxy, CA, endpoint…). File này đã nằm trong `.gitignore`.
+- Dòng `claude cfg` chỉ in **tên** biến trong `env`, không in giá trị.
 
 Cách đọc từng dòng kết quả: [`docs/spikes/diagnose.md`](../../docs/spikes/diagnose.md).

@@ -18,6 +18,7 @@ import { parseArgs } from "node:util";
 import {
   CLAUDE_SCHEMA, CLAUDE_SYSTEM_PROMPT, claudeFixedArgs, classifyClaudeFailure, classifyGhError, compareNodes,
   evaluateCounts, evaluateTranslation, hasProjectScope, isoDay, isoSecond, parseClaudeEnvelope, sampleStdin,
+  analyzeFilter, chooseClaude, countAfter, pickTimeProbe,
 } from "./checks.mjs";
 
 const SCRIPT = fileURLToPath(import.meta.url);
@@ -36,6 +37,7 @@ const { values: opt } = parseArgs({
     toast: { type: "boolean", default: false },
     raw: { type: "boolean", default: false },
     "skip-claude": { type: "boolean", default: false },
+    "write-config": { type: "boolean", default: false },
     "only-claude": { type: "boolean", default: false }, // nội bộ: lượt chạy từ Task Scheduler
     out: { type: "string" },
   },
@@ -190,43 +192,90 @@ function checkProject() {
       (e.ignored ? " → server bỏ qua filter" : ` partition=${e.partition} futureZero=${e.futureZero}`));
   }
 
-  // Filter dựa trên updatedAt của item hay của Issue? Mốc ≈ đầu ngày sau `day` (UTC).
-  const nodesQ = `query($login:String!,$n:Int!,$q:String!){ ${field}(login:$login){ projectV2(number:$n){ items(first:100, query:$q){ nodes{ updatedAt content{ __typename ... on Issue{ updatedAt } } } } } } }`;
-  const nodes = gql(nodesQ, { ...vars, q: `updated:>${day}` });
-  const list = nodes.ok ? nodes.data?.[field]?.projectV2?.items?.nodes : undefined;
-  if (Array.isArray(list)) {
-    const c = compareNodes(list, new Date(Date.parse(day) + 86_400_000).toISOString());
-    say("filter basis", "INFO", `${c.n} item trả về: item.updatedAt sau mốc ${c.itemAfter}/${c.n}, Issue.updatedAt sau mốc ${c.issueAfter}/${c.issues}`);
-  } else say("filter basis", "WARN", nodes.cls ?? "NO_DATA");
+  // Lấy toàn bộ item (chuẩn phía client) và các item filter trả về, để so.
+  const nodeFields = "id updatedAt content{ __typename ... on Issue{ updatedAt } }";
+  const pageQ = `query($login:String!,$n:Int!,$after:String){ ${field}(login:$login){ projectV2(number:$n){ items(first:100, after:$after){ pageInfo{ hasNextPage endCursor } nodes{ ${nodeFields} } } } } }`;
+  const pageQF = `query($login:String!,$n:Int!,$q:String!,$after:String){ ${field}(login:$login){ projectV2(number:$n){ items(first:100, after:$after, query:$q){ pageInfo{ hasNextPage endCursor } nodes{ ${nodeFields} } } } } }`;
+  const fetchAll = (q) => {
+    const all = [];
+    let after;
+    for (let i = 0; i < 50; i++) {
+      const v = { ...vars, ...(q ? { q } : {}), ...(after ? { after } : {}) };
+      const r = gql(q ? pageQF : pageQ, v);
+      const items = r.ok ? r.data?.[field]?.projectV2?.items : undefined;
+      if (!items) return { ok: false, cls: r.cls ?? "NO_DATA" };
+      all.push(...items.nodes.filter(Boolean));
+      if (!items.pageInfo.hasNextPage) return { ok: true, nodes: all };
+      after = items.pageInfo.endCursor;
+    }
+    return { ok: true, nodes: all, truncated: true };
+  };
 
-  // Độ chi tiết: filter có hiểu giờ/phút không?
-  const since = new Date(now.getTime() - 2 * 3_600_000);
-  const dt = count(`updated:>${isoSecond(since)}`);
-  if (!dt.ok) say("updated time", "WARN", `${dt.cls} → chỉ dùng được mức ngày`);
+  const allR = fetchAll();
+  const fR = fetchAll(`updated:>${day}`);
+  if (!allR.ok || !fR.ok) {
+    say("filter miss", "WARN", `không lấy được danh sách item (${allR.cls ?? fR.cls})`);
+    return;
+  }
+  const all = allR.nodes;
+  // Mốc an toàn: 2 ngày sau D → lệch múi giờ của server (vd. JST) không làm sai kết luận.
+  const safeMark = new Date(Date.parse(day) + 2 * 86_400_000).toISOString();
+  const basis = compareNodes(fR.nodes, safeMark);
+  say("filter basis", "INFO", `filter trả ${basis.n}: item.updatedAt sau mốc ${basis.itemAfter}/${basis.n}, Issue.updatedAt sau mốc ${basis.issueAfter}/${basis.issues}`);
+  const m = analyzeFilter(all, fR.nodes.map((x) => x.id), safeMark);
+  say("filter miss", m.missed === 0 ? "OK" : "FAIL",
+    `${m.missed}/${m.issuesAfter} issue cập nhật sau mốc mà filter KHÔNG trả` +
+    (m.missed ? ` (${m.missedItemStale} vì item.updatedAt không đổi) → không tin filter, phải so Issue.updatedAt phía client` : "") +
+    (allR.truncated ? " [đã cắt ở 5000 item]" : ""));
+  const issuesNewerThanItem = all.filter((x) => x.content?.__typename === "Issue" && Date.parse(x.content.updatedAt) > Date.parse(x.updatedAt)).length;
+  say("issue>item", "INFO", `${issuesNewerThanItem}/${all.length} item có Issue.updatedAt mới hơn item.updatedAt`);
+
+  // Độ chi tiết giờ/phút: mốc lấy từ dữ liệu thật (ngay trước item mới thứ 5).
+  const probe = pickTimeProbe(all, 5);
+  if (!probe) say("updated time", "SKIP", "project rỗng");
   else {
-    const r = gql(nodesQ, { ...vars, q: `updated:>${isoSecond(since)}` });
-    const l = r.ok ? r.data?.[field]?.projectV2?.items?.nodes ?? [] : [];
-    const c = compareNodes(l, since.toISOString());
-    say("updated time", "INFO", `2h gần nhất: server trả ${dt.c}, trong đó item.updatedAt đúng trong 2h: ${c.itemAfter}`);
+    const dt = count(`updated:>${probe}`);
+    const dayOnly = count(`updated:>=${probe.slice(0, 10)}`);
+    const expected = countAfter(all, probe);
+    if (!dt.ok) say("updated time", "WARN", `${dt.cls} → chỉ dùng được mức ngày`);
+    else say("updated time", dt.c === expected ? "OK" : "WARN",
+      `server ${dt.c}, client ${expected}, cả ngày ${dayOnly.ok ? dayOnly.c : "?"}` + (dt.c === expected ? " → hiểu giờ/phút" : " → không khớp, coi như chỉ mức ngày"));
   }
 }
 
 // ---------- Claude CLI ----------
 function resolveClaude() {
-  if (opt.claude) return { command: opt.claude, args: ["--model", opt.model], source: "--claude", timeoutSeconds: 180 };
+  if (opt.claude) return { command: opt.claude, args: ["--model", opt.model], env: {}, source: "--claude", timeoutSeconds: 180 };
   if (existsSync(opt.config)) {
     try {
       const c = JSON.parse(readFileSync(opt.config, "utf8"));
-      return { command: c.command, args: c.args ?? [], source: "config", timeoutSeconds: c.timeoutSeconds ?? 180 };
+      return { command: c.command, args: c.args ?? [], env: c.env ?? {}, source: "config", timeoutSeconds: c.timeoutSeconds ?? 180 };
     } catch {
       say("claude cfg", "FAIL", "config/claude-cli.local.json không phải JSON hợp lệ");
       return undefined;
     }
   }
   const found = runSync(WIN ? "where.exe" : "which", ["claude"]);
-  const first = firstLine(found.out);
-  if (!first) return undefined;
-  return { command: first, args: ["--model", opt.model], source: "PATH", timeoutSeconds: 180 };
+  const pick = chooseClaude(found.out.split(/\r?\n/), WIN);
+  if (!pick) return undefined;
+  const base = { env: {}, source: `PATH(${pick.kind})`, timeoutSeconds: 180 };
+  if (pick.kind === "npm") {
+    // Shim npm gọi node với cli.js của package @anthropic-ai/claude-code nằm cạnh nó.
+    const cli = join(dirname(pick.path), "node_modules", "@anthropic-ai", "claude-code", "cli.js");
+    if (!existsSync(cli)) {
+      say("claude path", "FAIL", "chỉ có claude.cmd (npm) và không tìm thấy cli.js → ghi config tay");
+      return undefined;
+    }
+    return { ...base, command: process.execPath, args: [cli, "--model", opt.model] };
+  }
+  return { ...base, command: pick.path, args: ["--model", opt.model] };
+}
+
+function writeConfig(cfg) {
+  if (existsSync(opt.config)) return say("write config", "SKIP", "config/claude-cli.local.json đã có, không ghi đè");
+  const json = { command: cfg.command, args: cfg.args, env: {}, timeoutSeconds: 120, concurrency: 2, maxInputChars: 30000 };
+  writeFileSync(opt.config, JSON.stringify(json, null, 2) + "\n", "utf8");
+  say("write config", "OK", "đã ghi config/claude-cli.local.json → thêm --settings vào args hoặc biến vào env nếu cần");
 }
 
 function runClaude(cfg) {
@@ -240,7 +289,7 @@ function runClaude(cfg) {
       done({ ...r, ms: Date.now() - started, out, err, timedOut });
     };
     try {
-      child = spawn(cfg.command, args, { cwd, shell: false, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
+      child = spawn(cfg.command, args, { cwd, env: { ...process.env, ...cfg.env }, shell: false, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
     } catch (e) {
       return finish({ spawnErrorCode: e.code ?? "UNKNOWN" });
     }
@@ -272,8 +321,13 @@ async function checkClaude() {
   const kind = extname(cfg.command).toLowerCase() || "(không đuôi)";
   say("claude path", WIN && /\.(cmd|bat|ps1)$/.test(kind) ? "FAIL" : "OK",
     `nguồn ${cfg.source}, loại ${kind}` + (WIN && /\.(cmd|bat|ps1)$/.test(kind) ? " → trỏ tới claude.exe hoặc node + cli.js" : ""));
-  const v = runSync(cfg.command, [...cfg.args.filter((a, i, all) => a !== "--model" && all[i - 1] !== "--model"), "--version"]);
-  if (v.code === 0) say("claude ver", "INFO", firstLine(v.out));
+  const envKeys = Object.keys(cfg.env);
+  const settings = cfg.args.includes("--settings");
+  say("claude cfg", "INFO", `--settings ${settings ? "có" : "không"}, env ${envKeys.length ? envKeys.join(",") : "không"}`); // chỉ tên biến, không in giá trị
+  if (opt["write-config"]) writeConfig(cfg);
+  const v = spawnSync(cfg.command, [...cfg.args.filter((a, i, all) => a !== "--model" && all[i - 1] !== "--model"), "--version"],
+    { encoding: "utf8", windowsHide: true, timeout: 60_000, env: { ...process.env, ...cfg.env } });
+  if (v.status === 0) say("claude ver", "INFO", firstLine(v.stdout ?? ""));
 
   const r = await runClaude(cfg);
   if (r.spawnErrorCode || r.timedOut || r.code !== 0) {

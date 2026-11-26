@@ -17,7 +17,7 @@ process.stdin.setEncoding("utf8");
 process.stdin.on("data", (c) => (stdin += c));
 process.stdin.on("end", async () => {
   const record = opt("--fake-record");
-  if (record) appendFileSync(record, JSON.stringify({ argv, stdin, cwd: process.cwd() }) + "\n");
+  if (record) appendFileSync(record, JSON.stringify({ argv, stdin, cwd: process.cwd(), envProbe: process.env.FAKE_ENV_PROBE }) + "\n");
 
   if (mode === "fail") {
     process.stderr.write("fake: not logged in\n");

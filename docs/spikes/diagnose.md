@@ -28,8 +28,10 @@ node scripts/diagnose/index.mjs --owner <org> --number <n> --scheduler --toast  
 | `scope WARN` | Thiếu `read:project`, query Projects v2 sẽ lỗi `SCOPE_MISSING` |
 | `projectsV2 FAIL PROJECTS_V2_UNSUPPORTED` | Bản GHES chưa có Projects v2, phải xem lại toàn bộ cách theo dõi |
 | `updated: FAIL ARG_QUERY_UNSUPPORTED` hoặc `server bỏ qua filter` | Poller phải lấy hết item rồi lọc phía client |
+| `filter miss FAIL` | Có issue cập nhật (comment…) mà `item.updatedAt` không đổi nên filter bỏ sót → không dùng filter `updated:` làm nguồn chính; phải so `Issue.updatedAt` phía client |
 | `filter basis` | Filter dựa trên updatedAt của item hay của Issue. App theo dõi `Issue.updatedAt`: nếu filter dựa trên item thì chỉ dùng nó để thu hẹp, vẫn phải so lại `Issue.updatedAt` |
 | `updated time` | Server có hiểu giờ/phút không. Không hiểu thì chỉ lọc được ở mức ngày |
+| `claude -p FAIL NOT_FOUND` | `command` không spawn được (shim npm không đuôi, alias PowerShell). Dùng `--write-config` hoặc sửa config, xem README |
 | `claude path FAIL` | `command` đang trỏ tới `.cmd`/`.ps1`. Cần trỏ tới `claude.exe`, hoặc `node` + `cli.js` |
 | `claude -p FAIL UNKNOWN_FLAG --x` | Bản Claude CLI đang cài không có cờ đó, ADR-0003 cần chỉnh |
 | `[sched] …` | Kết quả của cùng phép thử khi chạy qua Task Scheduler (khác PATH, khác môi trường) |
