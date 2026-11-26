@@ -1,0 +1,129 @@
+/* GH Issue Translator: sinh từ tokens.json bằng `pnpm tokens`. Không sửa tay. */
+
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --surface-1: #f6f7f9;
+  --surface-2: #eceef2;
+  --ja-surface: #fbf7f0;
+  --code-surface: #f3f4f6;
+  --border: #d9dce3;
+  --border-strong: #8c93a1;
+  --ink: #16191f;
+  --ink-muted: #565d6b;
+  --ai: #24489c;
+  --ai-soft: #e6ecf8;
+  --on-ai: #ffffff;
+  --shu: #b5401c;
+  --status-translating: #7a5000;
+  --status-translating-bg: #fff1cc;
+  --status-failed: #a51d14;
+  --status-failed-bg: #fde8e6;
+  --status-ok: #1b6b36;
+  --status-ok-bg: #e3f4e8;
+  --status-paused: #565d6b;
+  --shadow-popover: 0 4px 16px rgba(22,25,31,0.12);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121418;
+    --surface-1: #1a1d23;
+    --surface-2: #242832;
+    --ja-surface: #1c1a17;
+    --code-surface: #1d2027;
+    --border: #2f3440;
+    --border-strong: #5d6474;
+    --ink: #e8eaee;
+    --ink-muted: #a2a9b6;
+    --ai: #8fb0f0;
+    --ai-soft: #1c2740;
+    --on-ai: #0d1424;
+    --shu: #ff8f6b;
+    --status-translating: #f2c063;
+    --status-translating-bg: #3a2e10;
+    --status-failed: #ff9d92;
+    --status-failed-bg: #3d1714;
+    --status-ok: #7fd49a;
+    --status-ok-bg: #13321f;
+    --status-paused: #a2a9b6;
+    --shadow-popover: 0 4px 16px rgba(0,0,0,0.5);
+  }
+}
+
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 10px;
+  --radius-pill: 999px;
+  --measure: 72ch;
+  --sidebar-width: 280px;
+  --content-max: 1440px;
+  --font-sans: "Segoe UI Variable Text", "Segoe UI", system-ui, -apple-system, "Noto Sans", sans-serif;
+  --font-ja: "Yu Gothic UI", "Meiryo UI", Meiryo, "Hiragino Sans", "Noto Sans JP", sans-serif;
+  --font-mono: "Cascadia Mono", Consolas, "SF Mono", "Noto Sans Mono", monospace;
+}
+
+.t-title-page {
+  font-family: var(--font-sans);
+  font-size: 24px;
+  line-height: 32px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.t-title-section {
+  font-family: var(--font-sans);
+  font-size: 17px;
+  line-height: 24px;
+  font-weight: 600;
+}
+
+.t-body {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 24px;
+  font-weight: 400;
+}
+
+.t-body-strong {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 24px;
+  font-weight: 600;
+}
+
+.t-meta {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 18px;
+  font-weight: 400;
+}
+
+.t-label {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 600;
+}
+
+.t-body-ja {
+  font-family: var(--font-ja);
+  font-size: 15px;
+  line-height: 26px;
+  font-weight: 400;
+}
+
+.t-code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 400;
+}
+

@@ -29,7 +29,7 @@ Bạn là product designer. Thiết kế <màn hình/luồng> cho "GH Issue Tran
 
 ## Ràng buộc
 - Desktop trước (1280–1920px), vẫn dùng được ở ~800px.
-- React + CSS thường, không design system có sẵn; ưu tiên đơn giản, mật độ thông tin cao, đọc lâu không mỏi.
+- React + CSS thường dùng token có sẵn (dán kèm nội dung `apps/app/web/src/styles/tokens.json` hoặc tóm tắt từ `docs/architecture/design-tokens.md`): chàm `ai` là màu chính, son `shu` chỉ đánh dấu bản gốc tiếng Nhật, trạng thái luôn có chữ, font hệ thống Windows, sáng/tối theo hệ thống; ưu tiên đơn giản, mật độ thông tin cao, đọc lâu không mỏi.
 - Song ngữ: tiếng Việt là chính, tiếng Nhật đối chiếu (song song hoặc bật/tắt).
 - Copy UI bằng tiếng Việt.
 - Nhất quán với màn hình hiện có: <mô tả ngắn hoặc "chưa có">
