@@ -51,7 +51,14 @@ function say(key, status, detail = "") {
   lines.push(l);
   console.log(l);
   // Lượt chạy từ Task Scheduler: ghi từng dòng ngay → crash/quá hạn vẫn thấy đã tới bước nào.
-  if (opt["only-claude"] && opt.out) appendFileSync(opt.out, l + "\n", "utf8");
+  if (opt["only-claude"] && opt.out) appendOut(l);
+}
+function appendOut(line) {
+  try {
+    appendFileSync(opt.out, line + "\n", "utf8");
+  } catch (e) {
+    console.error(`không ghi được file kết quả (${e?.code ?? "UNKNOWN"})`);
+  }
 }
 function raw(text) {
   if (opt.raw && text) console.log(`    [raw] ${String(text).trim().replace(/\n/g, "\n          ")}`);
@@ -306,6 +313,16 @@ function writeConfig(cfg) {
   say("write config", "OK", "đã ghi config/claude-cli.local.json → thêm --settings vào args hoặc biến vào env nếu cần");
 }
 
+/** Xoá best-effort; trả mã lỗi (vd. EPERM) nếu không xoá được. Trên Windows thư mục có thể còn bị process khác giữ. */
+function tryRm(path) {
+  try {
+    rmSync(path, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    return undefined;
+  } catch (e) {
+    return e?.code ?? "UNKNOWN";
+  }
+}
+
 function runClaude(cfg) {
   return new Promise((done) => {
     const cwd = mkdtempSync(join(tmpdir(), "m0-claude-"));
@@ -313,8 +330,8 @@ function runClaude(cfg) {
     const started = Date.now();
     let out = "", err = "", timedOut = false, child;
     const finish = (r) => {
-      rmSync(cwd, { recursive: true, force: true });
-      done({ ...r, ms: Date.now() - started, out, err, timedOut });
+      const ms = Date.now() - started;
+      done({ ...r, ms, out, err, timedOut, cleanupError: tryRm(cwd) });
     };
     try {
       child = spawn(cfg.command, args, { cwd, env: { ...process.env, ...cfg.env }, shell: false, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
@@ -359,6 +376,8 @@ async function checkClaude() {
   if (v.status === 0) say("claude ver", "INFO", firstLine(v.stdout ?? ""));
 
   const r = await runClaude(cfg);
+  if (r.cleanupError)
+    say("claude tmp", "WARN", `không xoá được cwd tạm (${r.cleanupError}) → còn process giữ thư mục sau khi claude thoát (hook?) hoặc antivirus`);
   if (r.spawnErrorCode || r.timedOut || r.code !== 0) {
     raw(r.err);
     say("claude -p", "FAIL", `${classifyClaudeFailure({ spawnErrorCode: r.spawnErrorCode, stderr: r.err, timedOut: r.timedOut })} (${r.ms}ms)`);
@@ -424,7 +443,7 @@ Unregister-ScheduledTask -TaskName ${psq(name)} -Confirm:$false`);
     console.log(`[sched] ${l}`);
     if (/^\S+\s+FAIL/.test(l)) failures++;
   }
-  rmSync(out, { force: true });
+  tryRm(out);
   if (!finished) {
     const last = got.length ? `dừng sau dòng "${got.at(-1).split(/\s+/)[0]}"` : "không ghi dòng nào";
     return say("scheduler", "FAIL", `task không chạy xong trong ${Math.round(waitMs / 1000)}s, ${last} (LastTaskResult ${result})`);
@@ -499,5 +518,5 @@ main()
     process.exitCode = 1;
   })
   .finally(() => {
-    if (opt["only-claude"] && opt.out) appendFileSync(opt.out, SCHED_DONE + "\n", "utf8");
+    if (opt["only-claude"] && opt.out) appendOut(SCHED_DONE);
   });

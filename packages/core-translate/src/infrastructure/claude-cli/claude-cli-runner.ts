@@ -116,7 +116,9 @@ export async function runClaudeCli(input: RunClaudeCliInput): Promise<{ body: un
     const stdout = await run(config.command, [...config.args, ...fixedArgs(input.schema, input.systemPrompt)], input.stdin, cwd, config.timeoutSeconds * 1000, config.env ?? {});
     return readCliResult(stdout);
   } finally {
-    await rm(cwd, { recursive: true, force: true });
+    // Dọn dẹp là phụ: trên Windows thư mục có thể còn bị giữ (hook/process con của CLI chưa thoát, antivirus) → EPERM.
+    // Không được để lỗi dọn dẹp thay thế kết quả dịch hoặc CliRunFailure thật. Thư mục tạm rỗng sót lại là vô hại.
+    await rm(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }).catch(() => {});
   }
 }
 
