@@ -26,3 +26,5 @@ export { claudeCliEngineVersion } from "./infrastructure/claude-cli/claude-cli-e
 export { extractConfiguredModel } from "./infrastructure/claude-cli/cli-config.ts";
 export { CLAUDE_CLI_PROMPT_VERSION } from "./infrastructure/claude-cli/translation-prompt.ts";
 export { translationCacheKey, cacheKeyString, type TranslationCacheKey, type EngineVersion } from "./domain/translation-cache-key.ts";
+export type { TranslationCache, CachedTranslation } from "./application/translation-cache.port.ts";
+export { InMemoryTranslationCache } from "./infrastructure/in-memory-translation-cache.ts";
