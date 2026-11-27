@@ -31,7 +31,7 @@ node scripts/diagnose/index.mjs --owner <org> --number <n> --scheduler --toast  
 | `filter miss FAIL` | Có issue cập nhật (comment…) mà `item.updatedAt` không đổi nên filter bỏ sót → không dùng filter `updated:` làm nguồn chính; phải so `Issue.updatedAt` phía client |
 | `filter basis` | Filter dựa trên updatedAt của item hay của Issue. App theo dõi `Issue.updatedAt`: nếu filter dựa trên item thì chỉ dùng nó để thu hẹp, vẫn phải so lại `Issue.updatedAt` |
 | `updated time` | Server có hiểu giờ/phút không. Không hiểu thì chỉ lọc được ở mức ngày |
-| `item scan` | `FAIL`: không quét được toàn bộ item (mã lỗi). `OK`: `pages`, `items`, `issues`, `pr`, `draft`, `noaccess`, `ms` = chi phí **một chu kỳ poll** của 005b (số lần gọi `gh` = `pages`) → chọn chu kỳ poll mặc định |
+| `item scan` | `FAIL`: không quét được toàn bộ item (mã lỗi). `OK`: `pages`, `items`, `issues`, `pr`, `draft`, `noaccess`, `ms` = chi phí **một chu kỳ poll** của 005b (số lần gọi `gh` = `pages`) → chọn chu kỳ poll mặc định. Thêm: `closed` (số Issue có `state` CLOSED), `statusField` (`found` = project có field tên `--status-field`, mặc định `Status`; `missing` = không có field đó, kiểm lại tên; `unsupported` = GHES không nhận `fieldValueByName`/`field(name:)`, phép đo chạy lại không có Status), `statusSet` (số item có giá trị Status), `statusOptions` (số optionId khác nhau). Không in tên field hay tên giá trị. Dùng để chốt cách poller nhận issue "đóng" (state CLOSED hoặc Status thuộc danh sách cấu hình) ngay trong pha quét |
 | `gql stdin` | `FAIL <mã>`: `gh api graphql --input -` (JSON `{query, variables}` qua stdin) không chạy → adapter dùng `-f query=… -F …` (đã chạy được ở dòng `projectsV2`), id đi inline. `OK ms=…` → adapter dùng stdin |
 | `comments WARN … newerComment=N` | N > 0: comment mới KHÔNG làm `Issue.updatedAt` đổi → thiết kế 005b (phát hiện comment mới) sai, **báo lại trước khi làm tiếp** |
 | `comments` | `issues` (số Issue lấy được), `withComments`, `maxComments`, `over100` (số issue hơn 100 comment → phải phân trang comment; 0 = ít cần), `newerComment` (phải 0), `editedComment` (comment cuối được sửa sau `Issue.updatedAt`; chấp nhận được), `batches`, `batchMs` (trung bình mỗi lô 25 id), `batchMsMax` → chọn `DETAIL_BATCH` |
@@ -55,13 +55,13 @@ Chạy khi có `--owner` và `--number` (cần `projectsV2 OK`), sau các dòng 
 
 ```powershell
 $env:GH_HOST = "<host GHES>"
-node scripts/diagnose/index.mjs --owner <org> --number <n> --skip-claude
+node scripts/diagnose/index.mjs --owner <org> --number <n> --skip-claude            # thêm --status-field <tên> nếu field không tên "Status"
 ```
 
 Mẫu output (số liệu minh hoạ):
 
 ```
-item scan        OK    pages=3 items=286 issues=278 pr=5 draft=3 noaccess=0 ms=4100
+item scan        OK    pages=3 items=286 issues=278 pr=5 draft=3 noaccess=0 closed=120 statusField=found statusSet=270 statusOptions=5 ms=4100
 gql stdin        OK    ms=700
 comments         OK    issues=278 withComments=190 maxComments=31 over100=0 newerComment=0 editedComment=2 batches=12 batchMs=2400 batchMsMax=3100
 gql partial      INFO  exit=1 stdoutJson=yes data=1 errors=yes

@@ -310,13 +310,20 @@ export function chunk(arr, size) {
 
 /**
  * Tóm tắt kết quả quét item (`content{__typename ... on Issue{id updatedAt}}`): chỉ số đếm, không dữ liệu.
+ * `state` của Issue (CLOSED) và `status` (alias của fieldValueByName: `{optionId}`) là tuỳ chọn; không in giá trị.
  * `ids` = nodeId của Issue (mỗi id một lần) để dùng cho dòng `comments`/`gql partial`.
  */
 export function summarizeItemScan(nodes, pages) {
   const ids = [];
   const seen = new Set();
-  let issues = 0, pullRequest = 0, draftIssue = 0, inaccessible = 0;
+  let issues = 0, pullRequest = 0, draftIssue = 0, inaccessible = 0, closed = 0, statusSet = 0;
+  const options = new Set();
   for (const n of nodes) {
+    const opt = n?.status?.optionId;
+    if (typeof opt === "string") {
+      statusSet++;
+      options.add(opt);
+    }
     const t = n?.content?.__typename;
     if (!n?.content) inaccessible++;
     else if (t === "Issue") {
@@ -324,11 +331,12 @@ export function summarizeItemScan(nodes, pages) {
         seen.add(n.content.id);
         ids.push(n.content.id);
         issues++;
+        if (n.content.state === "CLOSED") closed++;
       }
     } else if (t === "PullRequest") pullRequest++;
     else if (t === "DraftIssue") draftIssue++;
   }
-  return { pages, items: nodes.length, issues, pullRequest, draftIssue, inaccessible, ids };
+  return { pages, items: nodes.length, issues, pullRequest, draftIssue, inaccessible, closed, statusSet, statusOptions: options.size, ids };
 }
 
 /**
@@ -380,4 +388,10 @@ export function classifyPartial({ code, stdout }) {
     data: Array.isArray(nodes) ? nodes.filter((n) => n !== null && n !== undefined).length : 0,
     hasErrors: Array.isArray(json?.errors) && json.errors.length > 0,
   };
+}
+
+/** `statusField=` của dòng item scan: `field` = kết quả `projectV2.field(name:)` (null = không có field), unsupported = query bị từ chối. */
+export function statusFieldState({ unsupported = false, field } = {}) {
+  if (unsupported) return "unsupported";
+  return field ? "found" : "missing";
 }

@@ -18,7 +18,7 @@ import { parseArgs } from "node:util";
 import {
   CLAUDE_SCHEMA, CLAUDE_SYSTEM_PROMPT, claudeFixedArgs, findForbiddenFlag, findConfigRangeProblem, classifyClaudeFailure, classifyGhError, compareNodes,
   evaluateCounts, evaluateTranslation, hasProjectScope, isoDay, isoSecond, parseClaudeEnvelope, sampleStdin,
-  analyzeFilter, chooseClaude, chunk, summarizeItemScan, summarizeComments, mutateNodeId, classifyPartial, diagnoseDataDir, describeStepFailure, localAppDataState, countAfter, pickTimeProbe, describeTaskResult, schedulerDeadlineMs, SCHED_DONE,
+  analyzeFilter, chooseClaude, chunk, summarizeItemScan, statusFieldState, summarizeComments, mutateNodeId, classifyPartial, diagnoseDataDir, describeStepFailure, localAppDataState, countAfter, pickTimeProbe, describeTaskResult, schedulerDeadlineMs, SCHED_DONE,
 } from "./checks.mjs";
 
 const SCRIPT = fileURLToPath(import.meta.url);
@@ -29,6 +29,7 @@ const { values: opt } = parseArgs({
   options: {
     owner: { type: "string" },
     "owner-type": { type: "string", default: "org" },
+    "status-field": { type: "string", default: "Status" },
     number: { type: "string" },
     config: { type: "string", default: join(REPO, "config/claude-cli.local.json") },
     claude: { type: "string" },
@@ -345,30 +346,43 @@ function checkGateway() {
   const field = opt["owner-type"] === "user" ? "user" : "organization";
   const vars = { login: opt.owner, n: Number(opt.number) };
 
-  // item scan: toàn bộ item, chỉ lấy id + Issue.updatedAt (query của scanProject).
-  const scanQ = `query($login:String!,$n:Int!,$after:String){ ${field}(login:$login){ projectV2(number:$n){ items(first:100, after:$after){ pageInfo{ hasNextPage endCursor } nodes{ content{ __typename ... on Issue{ id updatedAt } } } } } } }`;
-  const nodes = [];
-  let pages = 0, after, failed;
-  const t0 = Date.now();
-  for (let i = 0; i < 50; i++) {
-    const r = gql(scanQ, { ...vars, ...(after ? { after } : {}) });
-    const items = r.ok ? r.data?.[field]?.projectV2?.items : undefined;
-    if (!items) {
-      failed = r.cls ?? "NO_DATA";
-      break;
+  // item scan: toàn bộ item, lấy id + Issue.updatedAt + state + giá trị field Status (query của scanProject).
+  const scanQ = (withStatus) => `query($login:String!,$n:Int!,$after:String${withStatus ? ",$statusField:String!" : ""}){ ${field}(login:$login){ projectV2(number:$n){ ${withStatus ? "statusFieldInfo: field(name:$statusField){ __typename } " : ""}items(first:100, after:$after){ pageInfo{ hasNextPage endCursor } nodes{ ${withStatus ? "status: fieldValueByName(name:$statusField){ __typename ... on ProjectV2ItemFieldSingleSelectValue{ optionId } } " : ""}content{ __typename ... on Issue{ id updatedAt state } } } } } } }`;
+  const runScan = (withStatus) => {
+    const out = { nodes: [], pages: 0, field: undefined };
+    let after;
+    for (let i = 0; i < 50; i++) {
+      const r = gql(scanQ(withStatus), { ...vars, ...(withStatus ? { statusField: opt["status-field"] } : {}), ...(after ? { after } : {}) });
+      const project = r.ok ? r.data?.[field]?.projectV2 : undefined;
+      const items = project?.items;
+      if (!items) return { ...out, failed: r.cls ?? "NO_DATA" };
+      if (i === 0) out.field = project.statusFieldInfo;
+      out.pages++;
+      out.nodes.push(...items.nodes.filter(Boolean));
+      if (!items.pageInfo.hasNextPage) break;
+      after = items.pageInfo.endCursor;
     }
-    pages++;
-    nodes.push(...items.nodes.filter(Boolean));
-    if (!items.pageInfo.hasNextPage) break;
-    after = items.pageInfo.endCursor;
+    return out;
+  };
+  const t0 = Date.now();
+  let scanR = runScan(true);
+  let statusUnsupported = false;
+  if (scanR.failed) {
+    // fieldValueByName/field(name:) có thể không có trên GHES → đo lại không có Status.
+    const retry = runScan(false);
+    if (!retry.failed) {
+      statusUnsupported = true;
+      scanR = retry;
+    }
   }
   const scanMs = Date.now() - t0;
-  if (failed) {
-    say("item scan", "FAIL", `${failed} sau ${pages} trang`);
+  if (scanR.failed) {
+    say("item scan", "FAIL", `${scanR.failed} sau ${scanR.pages} trang`);
     return;
   }
-  const scan = summarizeItemScan(nodes, pages);
-  say("item scan", "OK", `pages=${scan.pages} items=${scan.items} issues=${scan.issues} pr=${scan.pullRequest} draft=${scan.draftIssue} noaccess=${scan.inaccessible} ms=${scanMs}`);
+  const scan = summarizeItemScan(scanR.nodes, scanR.pages);
+  const statusField = statusFieldState({ unsupported: statusUnsupported, field: scanR.field });
+  say("item scan", "OK", `pages=${scan.pages} items=${scan.items} issues=${scan.issues} pr=${scan.pullRequest} draft=${scan.draftIssue} noaccess=${scan.inaccessible} closed=${scan.closed} statusField=${statusField} statusSet=${scan.statusSet} statusOptions=${scan.statusOptions} ms=${scanMs}`);
 
   // gql stdin: query nhỏ có biến, gửi bằng --input -.
   const smallQ = `query($login:String!,$n:Int!){ ${field}(login:$login){ projectV2(number:$n){ items(first:1){ totalCount } } } }`;

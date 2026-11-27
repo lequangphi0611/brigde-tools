@@ -196,8 +196,27 @@ describe("diagnose: chọn claude và phân tích filter", () => {
         { content: null },
       ];
       expect(c.summarizeItemScan(nodes, 1)).toEqual({
-        pages: 1, items: 6, issues: 2, pullRequest: 1, draftIssue: 1, inaccessible: 1, ids: ["I_1", "I_2"],
+        pages: 1, items: 6, issues: 2, pullRequest: 1, draftIssue: 1, inaccessible: 1, closed: 0, statusSet: 0, statusOptions: 0, ids: ["I_1", "I_2"],
       });
+    });
+
+    it("summarizeItemScan đếm closed, statusSet, statusOptions (không in giá trị)", () => {
+      const I = (id: string, state: string) => ({ __typename: "Issue", id, updatedAt: "2026-01-01T00:00:00Z", state });
+      const nodes = [
+        { content: I("I_1", "CLOSED"), status: { __typename: "ProjectV2ItemFieldSingleSelectValue", optionId: "a" } },
+        { content: I("I_2", "OPEN"), status: { __typename: "ProjectV2ItemFieldSingleSelectValue", optionId: "b" } },
+        { content: I("I_3", "OPEN"), status: { __typename: "ProjectV2ItemFieldSingleSelectValue", optionId: "a" } },
+        { content: I("I_4", "CLOSED"), status: null },
+        { content: I("I_4", "CLOSED") },
+        { content: { __typename: "PullRequest" }, status: { optionId: "c" } },
+      ];
+      expect(c.summarizeItemScan(nodes, 2)).toMatchObject({ issues: 4, closed: 2, statusSet: 4, statusOptions: 3 });
+    });
+
+    it("statusFieldState", () => {
+      expect(c.statusFieldState({ field: { __typename: "ProjectV2SingleSelectField" } })).toBe("found");
+      expect(c.statusFieldState({ field: null })).toBe("missing");
+      expect(c.statusFieldState({ unsupported: true, field: { x: 1 } })).toBe("unsupported");
     });
 
     it("summarizeComments đếm withComments, maxComments, over100, newerComment, editedComment", () => {
