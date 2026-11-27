@@ -5,12 +5,20 @@ describe("resolveDataDir (AC-10)", () => {
   it("APP_DATA_DIR tuyệt đối được trả nguyên trên mọi nền tảng", () => {
     expect(resolveDataDir({ APP_DATA_DIR: "/srv/data" }, "linux", "/home/u")).toBe("/srv/data");
     expect(resolveDataDir({ APP_DATA_DIR: "D:\\gh-data" }, "win32", "C:\\Users\\u")).toBe("D:\\gh-data");
-    expect(resolveDataDir({ APP_DATA_DIR: "/srv/data" }, "win32", "C:\\Users\\u")).toBe("/srv/data");
+    expect(resolveDataDir({ APP_DATA_DIR: "\\\\server\\share\\d" }, "win32", "C:\\Users\\u")).toBe("\\\\server\\share\\d");
   });
 
   it("APP_DATA_DIR tương đối thì ném Error", () => {
     expect(() => resolveDataDir({ APP_DATA_DIR: "data" }, "linux", "/home/u")).toThrow(Error);
     expect(() => resolveDataDir({ APP_DATA_DIR: "." }, "win32", "C:\\Users\\u")).toThrow(/APP_DATA_DIR/);
+  });
+
+  it("kiểm tuyệt đối theo nền tảng", () => {
+    expect(() => resolveDataDir({ APP_DATA_DIR: "/srv/data" }, "win32", "C:\\Users\\u")).toThrow(/APP_DATA_DIR/);
+    expect(() => resolveDataDir({ APP_DATA_DIR: "\\data" }, "win32", "C:\\Users\\u")).toThrow(/APP_DATA_DIR/);
+    expect(() => resolveDataDir({ APP_DATA_DIR: "C:data" }, "win32", "C:\\Users\\u")).toThrow(/APP_DATA_DIR/);
+    expect(() => resolveDataDir({ APP_DATA_DIR: "C:\\data" }, "linux", "/home/u")).toThrow(/APP_DATA_DIR/);
+    expect(resolveDataDir({ APP_DATA_DIR: "C:/data" }, "win32", "C:\\Users\\u")).toBe("C:/data");
   });
 
   it("win32 dùng LOCALAPPDATA", () => {

@@ -119,6 +119,23 @@ describe("diagnose: chọn claude và phân tích filter", () => {
     }
   });
 
+  it("diagnoseDataDir và resolveDataDir cùng luật đường dẫn tuyệt đối", () => {
+    const paths = ["/srv/d", "\\srv", "C:\\d", "C:/d", "C:d", "\\\\h\\s", "//h/s", "rel", "."];
+    for (const platform of ["win32", "linux"]) {
+      for (const p of paths) {
+        const home = platform === "win32" ? "C:\\Users\\u" : "/home/u";
+        let expected: string | "throws";
+        try {
+          expected = resolveDataDir({ APP_DATA_DIR: p }, platform, home);
+        } catch {
+          expected = "throws";
+        }
+        const got = c.diagnoseDataDir({ APP_DATA_DIR: p }, platform, home);
+        expect(got.error ? "throws" : got.dir, `${platform} ${p}`).toBe(expected);
+      }
+    }
+  });
+
   it("diagnoseDataDir ghi nguồn, không nhận đường dẫn tương đối", () => {
     expect(c.diagnoseDataDir({ LOCALAPPDATA: "C:\\x" }, "win32", "h").source).toBe("LOCALAPPDATA");
     expect(c.diagnoseDataDir({}, "win32", "h").source).toBe("fallback");

@@ -240,7 +240,7 @@ export const SCHED_DONE = "done             INFO  hết lượt chạy";
 // ---------- 004: kiểm WAL trên file trong dataDir ----------
 /** Phản chiếu resolveDataDir (apps/app/src/shared/infrastructure/data-dir.ts), thêm `source` để in mà không lộ đường dẫn. */
 export function diagnoseDataDir(env, platform, homedir) {
-  const isAbs = (p) => /^([A-Za-z]:[\\/]|\\\\|\/)/.test(p);
+  const isAbs = (p) => (platform === "win32" ? /^([A-Za-z]:[\\/]|[\\/]{2})/.test(p) : p.startsWith("/"));
   const join = (base, ...parts) => [base.replace(/[\\/]+$/, ""), ...parts].join(platform === "win32" ? "\\" : "/");
   const name = "gh-issue-translator";
   if (env.APP_DATA_DIR) {
