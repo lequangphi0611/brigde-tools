@@ -110,10 +110,24 @@ describe("GhCliGateway.fetchIssueDetails", () => {
       updatedAt: "2026-11-02T00:00:00Z",
     }));
     const { gw, calls } = gateway({ ...contractFixture(), extraIssues: [issue("I_2", { comments })] });
-    const d = await gw.fetchIssueDetails(["I_2"]);
+    const { details: d, stats } = await gw.fetchIssueDetailsWithStats(["I_2"]);
     expect(d.issues[0]!.comments.map((c) => c.nodeId)).toEqual(comments.map((c) => c.nodeId));
     expect(calls().map((c) => c.operationName)).toEqual(["IssueDetails", "IssueComments", "IssueComments"]);
-    expect(gw.detailStats).toEqual({ detailCalls: 1, commentPages: 2 });
+    expect(stats).toEqual({ detailCalls: 1, commentPages: 2 });
+  });
+
+  it("số đếm theo từng lần gọi: hai lần chạy song song không đếm lẫn", async () => {
+    const comments = Array.from({ length: 230 }, (_, i) => ({
+      nodeId: `C_${i}`,
+      author: "a",
+      body: "x",
+      createdAt: new Date(Date.UTC(2026, 10, 1, 0, 0, i)).toISOString(),
+      updatedAt: "2026-11-02T00:00:00Z",
+    }));
+    const { gw } = gateway({ ...contractFixture(), extraIssues: [issue("I_2", { comments })] });
+    const [a, b] = await Promise.all([gw.fetchIssueDetailsWithStats(["I_2"]), gw.fetchIssueDetailsWithStats(["I_open"])]);
+    expect(a.stats).toEqual({ detailCalls: 1, commentPages: 2 });
+    expect(b.stats).toEqual({ detailCalls: 1, commentPages: 0 });
   });
 
   it("AC-5: 60 id chia 25/25/10; [] không gọi gh", async () => {

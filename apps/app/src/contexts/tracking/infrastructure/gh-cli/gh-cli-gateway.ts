@@ -101,14 +101,13 @@ function parse<T>(schema: z.ZodType<T>, value: unknown): T {
 }
 
 export interface DetailStats {
-  /** Số lần gọi `nodes(ids:)` trong lần `fetchIssueDetails` gần nhất. */
-  detailCalls: number;
-  /** Số lần gọi thêm để phân trang comment trong lần gần nhất. */
-  commentPages: number;
+  /** Số lần gọi `nodes(ids:)` trong lần `fetchIssueDetails` này. */
+  readonly detailCalls: number;
+  /** Số lần gọi thêm để phân trang comment trong lần này. */
+  readonly commentPages: number;
 }
 
 export class GhCliGateway implements GitHubGateway {
-  readonly detailStats: DetailStats = { detailCalls: 0, commentPages: 0 };
   private readonly config: GhCliConfig;
 
   constructor(
@@ -168,15 +167,19 @@ export class GhCliGateway implements GitHubGateway {
   }
 
   async fetchIssueDetails(nodeIds: readonly string[]): Promise<IssueDetails> {
-    this.detailStats.detailCalls = 0;
-    this.detailStats.commentPages = 0;
+    return (await this.fetchIssueDetailsWithStats(nodeIds)).details;
+  }
+
+  /** Như `fetchIssueDetails` kèm số đếm của riêng lần gọi này (gọi song song không đếm lẫn nhau). */
+  async fetchIssueDetailsWithStats(nodeIds: readonly string[]): Promise<{ details: IssueDetails; stats: DetailStats }> {
+    const stats = { detailCalls: 0, commentPages: 0 };
     const ids = [...new Set(nodeIds)];
     const found = new Map<string, GitHubIssueSnapshot>();
     const missing: string[] = [];
     for (let i = 0; i < ids.length; i += this.detailBatch) {
       const batch = ids.slice(i, i + this.detailBatch);
       const { data } = await runGhCli(this.config, { operationName: "IssueDetails", query: DETAILS_QUERY, variables: { ids: batch } });
-      this.detailStats.detailCalls++;
+      stats.detailCalls++;
       const { nodes } = parse(detailsData, data);
       if (nodes.length !== batch.length) throw new GitHubFailure("bad_output", "shape");
       for (const [index, raw] of nodes.entries()) {
@@ -190,7 +193,7 @@ export class GhCliGateway implements GitHubGateway {
         let next = n.comments.pageInfo;
         while (next.hasNextPage) {
           if (next.endCursor === null) throw new GitHubFailure("bad_output", "cursor");
-          const more = await this.commentPage(n.id, next.endCursor);
+          const more = await this.commentPage(n.id, next.endCursor, stats);
           comments.push(...more.nodes.map(toComment));
           next = more.pageInfo;
         }
@@ -207,12 +210,12 @@ export class GhCliGateway implements GitHubGateway {
         });
       }
     }
-    return { issues: ids.filter((id) => found.has(id)).map((id) => found.get(id)!), missing };
+    return { details: { issues: ids.filter((id) => found.has(id)).map((id) => found.get(id)!), missing }, stats };
   }
 
-  private async commentPage(id: string, cursor: string) {
+  private async commentPage(id: string, cursor: string, stats: { commentPages: number }) {
     const { data } = await runGhCli(this.config, { operationName: "IssueComments", query: COMMENTS_QUERY, variables: { id, cursor } });
-    this.detailStats.commentPages++;
+    stats.commentPages++;
     const node = parse(commentsData, data).node;
     if (node === null) throw new GitHubFailure("bad_output", "shape");
     return node.comments;

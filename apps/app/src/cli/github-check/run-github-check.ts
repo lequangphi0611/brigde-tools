@@ -1,4 +1,4 @@
-import { GitHubFailure, type GitHubGateway, type GitHubIssueSnapshot, type ProjectRef } from "../../shared/ports/github-gateway.port.ts";
+import { GitHubFailure, type GitHubGateway, type GitHubIssueSnapshot, type IssueDetails, type ProjectRef } from "../../shared/ports/github-gateway.port.ts";
 import { countJapaneseChars } from "../translate-issue/issue-input.ts";
 
 export const USAGE = `Cách dùng:
@@ -12,9 +12,9 @@ export interface Sink {
   write(chunk: string): void;
 }
 
-/** Gateway dùng cho github-check: cần thêm số đếm của lần lấy chi tiết gần nhất. */
+/** Gateway dùng cho github-check: lấy chi tiết kèm số đếm của chính lần gọi đó. */
 export interface CheckGateway extends GitHubGateway {
-  readonly detailStats: { detailCalls: number; commentPages: number };
+  fetchIssueDetailsWithStats(nodeIds: readonly string[]): Promise<{ details: IssueDetails; stats: { detailCalls: number; commentPages: number } }>;
 }
 
 export interface RunGithubCheckOptions {
@@ -178,7 +178,7 @@ export async function runGithubCheck(options: RunGithubCheckOptions): Promise<nu
     const chosen = recent.slice(0, args.maxDetails).map((i) => i.nodeId);
 
     const t1 = performance.now();
-    const details = await gateway.fetchIssueDetails(chosen);
+    const { details, stats } = await gateway.fetchIssueDetailsWithStats(chosen);
     const detailMs = Math.round(performance.now() - t1);
 
     const m = measureDetails(details.issues);
@@ -195,8 +195,8 @@ export async function runGithubCheck(options: RunGithubCheckOptions): Promise<nu
       recent: recent.length,
       details: details.issues.length,
       missing: details.missing.length,
-      detailCalls: gateway.detailStats.detailCalls,
-      commentPages: gateway.detailStats.commentPages,
+      detailCalls: stats.detailCalls,
+      commentPages: stats.commentPages,
       detailMs,
       ...m,
     };
