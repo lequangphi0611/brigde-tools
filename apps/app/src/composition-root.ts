@@ -1,4 +1,4 @@
-import { FakeTranslator, type Translator } from "@app/core-translate";
+import { CachingTranslator, FakeTranslator, type Translator } from "@app/core-translate";
 import { systemClock, type Clock } from "./shared/ports/clock.port.ts";
 import type { GitHubGateway } from "./shared/ports/github-gateway.port.ts";
 import type { Notifier } from "./shared/ports/notifier.port.ts";
@@ -6,6 +6,7 @@ import { openAppStorage } from "./shared/infrastructure/sqlite/app-storage.ts";
 import type { Database } from "./shared/infrastructure/sqlite/open-database.ts";
 import { SqliteSettingStore } from "./shared/infrastructure/sqlite/sqlite-setting-store.ts";
 import type { SettingStore } from "./shared/ports/setting-store.port.ts";
+import { SqliteTranslationCache } from "./contexts/translation/infrastructure/sqlite-translation-cache.ts";
 import { ControllableClock, FakeGitHub, RecordingNotifier } from "./test-harness/fakes.ts";
 
 export interface Deps {
@@ -29,7 +30,11 @@ export function buildDeps(mode: string | undefined): Deps {
     // Fake dùng SQLite thật trong bộ nhớ (ADR-0008), không đụng tới dataDir.
     const storage = openAppStorage({ path: ":memory:" });
     return {
-      translator: new FakeTranslator(),
+      translator: new CachingTranslator({
+        inner: new FakeTranslator(),
+        cache: new SqliteTranslationCache(storage, clock),
+        engineVersion: () => ({ promptVersion: "fake/1", configuredModel: "" }),
+      }),
       github,
       notifier,
       clock,
