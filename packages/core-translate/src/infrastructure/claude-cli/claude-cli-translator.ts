@@ -1,10 +1,11 @@
 import { assertValidTranslationRequest } from "../../application/translation-request.ts";
 import { TranslationFailure } from "../../application/translation-failure.ts";
 import type { TranslationRequest, TranslationResult, Translator } from "../../application/translator.port.ts";
+import { mergeGlossary } from "../../domain/glossary.ts";
 import { hasTranslatableText, protect, restore } from "../../domain/protected-spans.ts";
 import { loadCliConfig, type CliConfig } from "./cli-config.ts";
 import { CliRunFailure, runClaudeCli } from "./claude-cli-runner.ts";
-import { planBatches, type BatchItem } from "./chunking.ts";
+import { batchTerms, planBatches, type BatchItem } from "./chunking.ts";
 import {
   buildTranslationStdin,
   TRANSLATION_OUTPUT_JSON_SCHEMA,
@@ -33,20 +34,26 @@ export class ClaudeCliTranslator implements Translator {
 
     const prepared = request.segments.map((s) => ({ id: s.id, text: s.text, ...protect(s.text) }));
     const toSend = prepared.filter((p) => hasTranslatableText(p.masked));
+    // Request đã được kiểm hợp lệ; gộp một tầng để chuẩn hoá và sắp theo khoá thuật ngữ (xác định).
+    const glossary = mergeGlossary([], request.context.glossary);
     const plan = planBatches(
       toSend.map((p) => ({ id: p.id, masked: p.masked })),
       request.context.hint,
+      glossary,
+      request.direction,
       config.maxInputChars,
     );
     if (!plan.ok) throw new TranslationFailure(plan.reason, "Nội dung vượt giới hạn độ dài gửi tới Claude CLI");
 
-    const systemPrompt = translationSystemPrompt(request.direction);
     const spansById = new Map(prepared.map((p) => [p.id, p.spans]));
     const translated = new Map<string, string>();
     let model: string | null = null;
     let first = true;
     for (const batch of plan.batches) {
-      const out = await this.runBatch(config, systemPrompt, request.context.hint, batch, spansById);
+      const terms = batchTerms(glossary, batch, request.direction);
+      const systemPrompt = translationSystemPrompt(request.direction, { hasGlossary: terms.length > 0 });
+      const stdin = buildTranslationStdin(request.context.hint, terms, batch, request.direction);
+      const out = await this.runBatch(config, systemPrompt, stdin, batch, spansById);
       if (first) model = out.model;
       first = false;
       for (const [id, text] of out.texts) translated.set(id, text);
@@ -61,7 +68,7 @@ export class ClaudeCliTranslator implements Translator {
   private async runBatch(
     config: CliConfig,
     systemPrompt: string,
-    hint: string | undefined,
+    stdin: string,
     batch: ReadonlyArray<BatchItem>,
     spansById: ReadonlyMap<string, ReadonlyArray<string>>,
   ): Promise<{ texts: Map<string, string>; model: string | null }> {
@@ -71,7 +78,7 @@ export class ClaudeCliTranslator implements Translator {
         config,
         schema: TRANSLATION_OUTPUT_JSON_SCHEMA,
         systemPrompt,
-        stdin: buildTranslationStdin(hint, batch),
+        stdin,
       });
     } catch (e) {
       if (e instanceof CliRunFailure) {
