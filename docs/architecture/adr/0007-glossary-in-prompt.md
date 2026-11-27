@@ -1,6 +1,6 @@
 # ADR-0007: Glossary trong prompt — chuẩn hoá khoá, chỉ ghép thuật ngữ liên quan, `glossaryVersion` theo nội dung
 
-- Trạng thái: Proposed
+- Trạng thái: Accepted
 - Ngày: 2026-11-27
 - Liên quan: ADR-0006 (port theo lô), story 002 (`docs/features/002-two-tier-glossary/spec.md`), story 003 (cache), 012, 015
 
