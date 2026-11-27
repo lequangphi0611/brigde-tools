@@ -61,5 +61,6 @@ Nguồn: `pnpm diagnose` trên máy công ty (người dùng gõ lại kết qu�
 - `jaChars=0` ở lần 1–2: file xuất bằng `>` của PowerShell 5.1 đã mất tiếng Nhật trước khi vào file (rủi ro đã dự báo trong spec 003b). Xuất lại đúng cách thì UTF-16LE có BOM đọc bình thường (`jaChars=195`).
 - Timeout 120s đến từ `config/claude-cli.local.json` cũ trên máy, không phải mặc định của code (300). Lần 3 cho thấy `not_configured` không nói lý do → đã thêm `detail=` / `field=` (003b, sửa sau chạy thật).
 - **Thời gian:** 1024 ký tự mất **154s**, so với 12–16s cho câu mẫu của diagnose. Thời gian có vẻ tăng theo độ dài nội dung, nhưng mới có 2 điểm đo nên chưa kết luận. Với 300s, timeout chỉ dư khoảng 2 lần; issue dài hoặc job gộp nhiều comment có thể hết giờ. **Cần đo thêm** (một issue dài, một issue ngắn) trước story 006 để chọn: timeout tăng theo số ký tự, hay trần kích thước job.
+- **Chất lượng bản dịch:** user tự đọc `vi.md` và xác nhận dịch chuẩn (không gửi nội dung ra ngoài).
 - `tmpLeft=0` ở mọi lần: EPERM chưa làm thư mục `ghit-ai-*` dồn lại.
 - Node v24.9 vẫn in `ExperimentalWarning` của `node:sqlite` (chấp nhận, nâng Node theo ADR-0004).
