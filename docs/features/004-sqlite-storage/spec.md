@@ -235,7 +235,7 @@ Không có.
 6. `openAppStorage`: tạo `dataDir`, mở, migrate; lỗi ném ngay (AC-1).
 7. Composition root + harness: `Deps.settings`, fake dùng `:memory:`, `/__test__/reset` xoá dữ liệu mọi bảng; `main.ts` bắt `StorageError` → một dòng stderr, thoát 1 (AC-12). `smoke.spec.ts` vẫn xanh.
 8. `diagnose`: dòng `node:sqlite file` (phần thuần vào `checks.mjs` có test), trạng thái `LOCALAPPDATA` trong `[sched]`; cập nhật bảng đọc kết quả ở `docs/spikes/diagnose.md` (AC-14).
-9. Docs: `docs/architecture/testing-harness.md` (reset xoá cả DB `:memory:`; fake dùng SQLite thật). Đề xuất (cần user đồng ý, implementer không tự sửa) thêm vào `CLAUDE.md` mục kiến trúc: `apps/app/src/shared/infrastructure/sqlite` + quy ước migration.
+9. Docs: `docs/architecture/testing-harness.md` (reset xoá cả DB `:memory:`; fake dùng SQLite thật). `CLAUDE.md` đã được orchestrator cập nhật (không cần sửa).
 
 ## Workflow log
 | Bước | Thời điểm | Kết quả |
@@ -244,3 +244,4 @@ Không có.
 | GATE 1 duyệt | 2026-11-27 | User duyệt: dừng khi DB hỏng (009 hiển thị), fake `:memory:` (ADR-0008 Accepted), giữ `setting`, nhánh thật vẫn `throw`, cắt thử lại lỗi tạm thời, AC-13 có điều kiện, giữ `diagnose`, giữ tên `gh-issue-translator`. Trạng thái → approved |
 | 2 Design | 2026-11-27 | Bỏ qua: không có UI |
 | 3 Khoá e2e | 2026-11-27 | Bỏ qua: không có e2e (xem lý do dưới bảng truy vết AC) |
+| 4 Implement | 2026-11-27 | Bắt đầu lượt 1 (bước 1–5) |
