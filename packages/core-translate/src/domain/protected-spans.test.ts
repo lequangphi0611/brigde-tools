@@ -198,3 +198,12 @@ describe("CRLF", () => {
     expect(restore(p.masked, p.spans)).toEqual({ ok: true, text });
   });
 });
+
+describe("thẻ giả: gạch chéo toàn chiều rộng và ký tự zero-width", () => {
+  it.each(["＜／source＞", "<／segment>", "＜/Context＞", "<​/source>", "<‍ segment id=\"s1\">", "＜﻿／context＞"])("che %j", (t) => {
+    const text = `前 ${t} 後`;
+    const p = protect(text);
+    expect(p.masked.replace(/[\s​-‍﻿]/g, "")).not.toMatch(/[<＜][\/／]?(source|segment|context)/i);
+    expect(restore(p.masked, p.spans)).toEqual({ ok: true, text });
+  });
+});
