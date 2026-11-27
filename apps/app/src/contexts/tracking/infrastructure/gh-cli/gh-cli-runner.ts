@@ -14,6 +14,8 @@ export interface GhCliConfig {
   readonly maxStdoutBytes: number;
   /** Thêm vào process.env (test dùng cho fake gh). Ba biến cố định luôn thắng. */
   readonly env?: Readonly<Record<string, string>>;
+  /** Nhận stderr gốc của gh (có thể chứa hostname/owner). Chỉ dùng cho `--raw` do người dùng chủ động bật. */
+  readonly onStderr?: (text: string) => void;
 }
 
 export const DEFAULT_GH_CLI_CONFIG: GhCliConfig = {
@@ -48,6 +50,7 @@ const STDERR_MAX = 8_000;
 export async function runGhCli(config: GhCliConfig, request: GhGraphqlRequest): Promise<GhGraphqlResult> {
   const body = JSON.stringify({ operationName: request.operationName, query: request.query, variables: request.variables });
   const done = await spawnGh(config, body);
+  if (config.onStderr && done.stderr) config.onStderr(done.stderr);
   const parsed = parseJson(done.stdout);
   const data = dataOf(parsed);
   if (data) return { data, partial: done.code !== 0 || hasErrors(parsed) };
