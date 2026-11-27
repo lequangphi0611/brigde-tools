@@ -238,6 +238,17 @@ describe("composition root nhánh thật (005c AC-3, AC-5)", () => {
     a.deps.storage.close();
   });
 
+  it("claudeCliConfig của config được truyền vào translator: file không tồn tại thì dịch lỗi not_configured", async () => {
+    const a = boot("ok");
+    const req = { direction: { from: "ja", to: "vi" }, segments: [{ id: "a", text: "ログイン" }], context: { glossary: [] } } as const;
+    await expect(a.deps.translator.translate(req)).rejects.toMatchObject({ reason: "not_configured" });
+    // Tạo file đúng tại đường dẫn của config (đọc lại mỗi lần dịch): dịch thành công chứng tỏ đường dẫn đó được dùng.
+    const fakeCli = fileURLToPath(new URL("../../../packages/core-translate/src/infrastructure/claude-cli/testing/fake-claude-cli.mjs", import.meta.url));
+    writeFileSync(path.join(dir, "no-such.json"), JSON.stringify({ command: process.execPath, args: [fakeCli], timeoutSeconds: 30 }));
+    expect((await a.deps.translator.translate(req)).segments).toEqual([{ id: "a", text: "[vi] ログイン" }]);
+    a.deps.storage.close();
+  });
+
   it("thiếu RealWiring thì ném", () => {
     expect(() => buildDeps(undefined)).toThrow();
   });

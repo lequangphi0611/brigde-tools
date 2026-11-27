@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
-import type { PollProjectConfig } from "../../contexts/tracking/application/poll-cycle.ts";
+import { isAbsoluteFor } from "./data-dir.ts";
 
 /** Cấu hình app tạm ở `<dataDir>/config.json` tới khi 013 có UI (005c). */
 export const CONFIG_FILE_NAME = "config.json";
@@ -47,6 +47,8 @@ export interface LoadAppConfigOptions {
   /** Đọc file UTF-8; ném lỗi có `code` (ENOENT = không có file). */
   readFile: (filePath: string) => string;
   defaultClaudeCliConfig?: string;
+  /** Mặc định `process.platform`; quyết định "tuyệt đối" cho `claudeCliConfig`. */
+  platform?: string;
 }
 
 /** Đọc + kiểm `<dataDir>/config.json`. Lỗi chỉ có mã và đường dẫn field, không bao giờ chứa giá trị đã nhập. */
@@ -72,6 +74,7 @@ export function loadAppConfig(options: LoadAppConfigOptions): AppConfigResult {
     return { ok: false, error: { code: "config_invalid", field: issuePath.length === 0 ? "(root)" : issuePath.join(".") } };
   }
   const d = parsed.data;
+  const platform = options.platform ?? process.platform;
   const claude = d.claudeCliConfig ?? options.defaultClaudeCliConfig ?? DEFAULT_CLAUDE_CLI_CONFIG;
   return {
     ok: true,
@@ -79,13 +82,7 @@ export function loadAppConfig(options: LoadAppConfigOptions): AppConfigResult {
       project: d.project,
       pollIntervalMin: d.pollIntervalMin,
       // Đường dẫn tương đối tính từ dataDir (không phụ thuộc cwd).
-      claudeCliConfig: path.isAbsolute(claude) || /^[A-Za-z]:[\\/]/.test(claude) ? claude : path.resolve(options.dataDir, claude),
+      claudeCliConfig: isAbsoluteFor(platform, claude) ? claude : (platform === "win32" ? path.win32 : path.posix).resolve(options.dataDir, claude),
     },
   };
-}
-
-/** Ánh xạ sang tham số thuần của `PollCycle` (005b). */
-export function toPollProjectConfig(config: AppConfig): PollProjectConfig {
-  const { owner, ownerType, number, statusField, closedStatuses } = config.project;
-  return { owner, ownerType, number, statusField, closedStatuses: [...closedStatuses] };
 }

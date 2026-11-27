@@ -45,7 +45,7 @@ Là người dùng có máy công ty chạy GHES, tôi muốn chạy `pnpm start
 - Mặc định: `ownerType = "org"` (hoặc `"user"`), `statusField = "Status"`, `closedStatuses = []` (mỗi phần tử là chuỗi khác rỗng), `pollIntervalMin = 5` (số nguyên 1–60), `claudeCliConfig` = `<repo>/config/claude-cli.local.json` (cùng mặc định với `translate-issue`; 005c không gọi dịch nên file này không cần tồn tại lúc khởi động).
 - Khoá lạ: bỏ qua (không lỗi), để thêm khoá ở story sau không làm hỏng file cũ.
 - Đường dẫn file: `<dataDir>/config.json`, `dataDir` theo `resolveDataDir` (ADR-0008).
-- Lỗi: `config_missing` (kèm đường dẫn file để in dòng riêng), `config_invalid field=(root)` (không phải JSON / không phải object), `config_invalid field=<đường dẫn field>` (vd. `project.number`, `closedStatuses.0`). Không bao giờ in giá trị đã nhập.
+- Lỗi: `config_missing` (kèm đường dẫn file để in dòng riêng), `config_invalid field=(root)` (không phải JSON / không phải object), `config_invalid field=<đường dẫn field>` (vd. `project.number`, `project.closedStatuses.0`). Không bao giờ in giá trị đã nhập.
 
 ### Khởi động nhánh thật (`APP_ADAPTERS` khác `fake`)
 Thứ tự, dừng ở lỗi đầu tiên; exit code 2 cho lỗi người dùng sửa được, 1 cho lỗi lưu trữ/nội bộ:
@@ -77,7 +77,7 @@ Scenario: AC-1 Đọc cấu hình app
   Given config.json không phải JSON (hoặc là mảng)
   Then lỗi config_invalid field=(root)
   Given project.number là "12", hoặc pollIntervalMin là 0 hoặc 61 hoặc 2.5, hoặc closedStatuses chứa "", hoặc thiếu project.owner
-  Then lỗi config_invalid với field tương ứng (project.number, pollIntervalMin, closedStatuses.0, project.owner)
+  Then lỗi config_invalid với field tương ứng (project.number, pollIntervalMin, project.closedStatuses.0, project.owner)
   And thông báo không chứa giá trị đã nhập
 
 Scenario: AC-2 Khởi động nhánh thật: lỗi trước khi chạy
@@ -171,9 +171,13 @@ Không còn (các quyết định liên quan đã chốt ở GATE 1 của 005b: 
 5. **Docs**: mục "Kiểm poller (005b/005c)" trong `docs/spikes/diagnose.md` (tạo `config.json`, `pnpm start`, bảng bước/dòng mong đợi, bảng trường `[poll]` từ spec 005b); thêm `pnpm start` vào `CLAUDE.md` và sửa câu trạng thái "toast và poller chưa có" (cần user đồng ý khi sửa `CLAUDE.md`).
 6. **ĐIỂM DỪNG — kiểm trên máy thật** (user): `github-check` với project cá nhân, rồi 7 bước ở trên. Orchestrator ghi kết quả vào `docs/spikes/projects-v2-polling.md` (Lần 5) và Workflow log. Lệch → báo user, không tự sửa AC.
 
+## Finding để lại
+- SIGINT/SIGTERM chỉ `scheduler.stop()` → server → DB; tiến trình `gh` con đang chạy không bị dọn khi tắt. Xử lý ở 020 (chạy nền / một instance).
+
 ## Workflow log
 | Bước | Thời điểm | Kết quả |
 |---|---|---|
 | 1 Phân tích | 2026-11-27 | Tách từ draft 005b ở GATE 1 của 005b: AC-28…31 cũ → AC-1…4, thêm AC-5 (gh chưa đăng nhập không chặn khởi động, trước là một dòng thiết kế), bảng kiểm Windows 7 bước. Không e2e |
 | GATE 1 | 2026-11-27 | User duyệt (cùng GATE 1 của 005b): `config.json` ở `<dataDir>`, poll 5 phút (1–60), `pnpm start`, kiểm máy thật bằng project cá nhân GHES (`ownerType: "user"`) đủ 7 bước. Code gộp PR #11 với 005a, 005b. Trạng thái approved |
 | Implement 1–5 | 2026-11-27 | AppConfig, startup/format, nhánh thật buildDeps(mode, RealWiring), main.ts + `pnpm start`, docs (diagnose.md, CLAUDE.md). Chờ bước 6 (kiểm máy thật, user) |
+| Sửa theo review | 2026-11-27 | Review APPROVE; sửa: `toPollProjectConfig` về composition-root (app-config không import tracking), test claudeCliConfig vào translator, field `project.closedStatuses.0` (spec cho khớp), `isAbsoluteFor` cho claudeCliConfig, ghi chú lỗi đọc file ở diagnose.md, `pnpm dev` dùng cross-env APP_ADAPTERS=fake |

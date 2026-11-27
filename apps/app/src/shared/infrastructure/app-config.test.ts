@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_CLAUDE_CLI_CONFIG, loadAppConfig, toPollProjectConfig } from "./app-config.ts";
+import { DEFAULT_CLAUDE_CLI_CONFIG, loadAppConfig } from "./app-config.ts";
 
 const load = (content: string | null, dataDir = "/data") =>
   loadAppConfig({
@@ -35,16 +35,19 @@ describe("AppConfig (AC-1)", () => {
     expect(r.ok && r.config.project.ownerType).toBe("user");
   });
 
-  it("ánh xạ sang PollProjectConfig", () => {
-    const r = load(JSON.stringify({ project: { ...base.project, closedStatuses: ["Done"] }, pollIntervalMin: 1 }));
-    if (!r.ok) throw new Error("unexpected");
-    expect(toPollProjectConfig(r.config)).toEqual({ owner: "acme-secret", ownerType: "org", number: 12, statusField: "Status", closedStatuses: ["Done"] });
-    expect(r.config.pollIntervalMin).toBe(1);
-  });
-
   it("claudeCliConfig tương đối tính từ dataDir", () => {
     const r = load(JSON.stringify({ ...base, claudeCliConfig: "c.json" }), "/data");
     expect(r.ok && r.config.claudeCliConfig).toBe("/data/c.json");
+  });
+
+  it("claudeCliConfig win32: tuyệt đối giữ nguyên, \\x.json (không ổ đĩa) coi là tương đối", () => {
+    const at = (v: string) => loadAppConfig({ dataDir: "C:\\data", platform: "win32", readFile: () => JSON.stringify({ ...base, claudeCliConfig: v }) });
+    const abs = at("D:\\cfg\\c.json");
+    expect(abs.ok && abs.config.claudeCliConfig).toBe("D:\\cfg\\c.json");
+    const rel = at("\\x.json");
+    expect(rel.ok && rel.config.claudeCliConfig).toBe("C:\\x.json");
+    const rel2 = at("sub\\c.json");
+    expect(rel2.ok && rel2.config.claudeCliConfig).toBe("C:\\data\\sub\\c.json");
   });
 
   it("không có file: config_missing kèm đường dẫn", () => {
@@ -61,11 +64,11 @@ describe("AppConfig (AC-1)", () => {
     [{ ...base, pollIntervalMin: 0 }, "pollIntervalMin"],
     [{ ...base, pollIntervalMin: 61 }, "pollIntervalMin"],
     [{ ...base, pollIntervalMin: 2.5 }, "pollIntervalMin"],
-    [{ project: { ...base.project, closedStatuses: [""] } }, "closedStatuses.0"],
+    [{ project: { ...base.project, closedStatuses: [""] } }, "project.closedStatuses.0"],
     [{ project: { number: 3 } }, "project.owner"],
   ])("sai field %#", (v, field) => {
     const err = failField(v);
-    expect(err).toContain(`"field":"${field.startsWith("closed") ? "project." + field : field}"`);
+    expect(err).toContain(`"field":"${field}"`);
     expect(err).not.toContain("secret");
   });
 });

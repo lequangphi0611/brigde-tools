@@ -21,7 +21,7 @@ import { SqliteUnitOfWork } from "./shared/infrastructure/sqlite/sqlite-unit-of-
 import { PollCycle, type PollProjectConfig } from "./contexts/tracking/application/poll-cycle.ts";
 import { SqliteTrackingRepository } from "./contexts/tracking/infrastructure/sqlite-tracking-repository.ts";
 import { ControllableClock, FakeGitHub, RecordingNotifier } from "./test-harness/fakes.ts";
-import { toPollProjectConfig, type AppConfig } from "./shared/infrastructure/app-config.ts";
+import type { AppConfig } from "./shared/infrastructure/app-config.ts";
 import { GhCliGateway } from "./contexts/tracking/infrastructure/gh-cli/gh-cli-gateway.ts";
 import type { GhCliConfig } from "./contexts/tracking/infrastructure/gh-cli/gh-cli-runner.ts";
 import { PollScheduler } from "./contexts/tracking/application/poll-scheduler.ts";
@@ -34,11 +34,11 @@ export interface Deps {
   settings: SettingStore;
   /** Handle SQLite dùng chung; đóng khi tắt app. */
   storage: Database;
-  /** Chỉ có khi chạy fake — để mount test-harness routes. */
   /** Chỉ có ở nhánh thật: người gọi (main.ts) `start()` sau khi server lên và `stop()` khi tắt. */
   scheduler?: PollScheduler;
   /** Chỉ có ở nhánh thật; test chạy trực tiếp một chu kỳ mà không chờ hẹn giờ. */
   pollCycle?: PollCycle;
+  /** Chỉ có khi chạy fake — để mount test-harness routes. */
   harness?: { storage: Database; github: FakeGitHub; notifier: RecordingNotifier; clock: ControllableClock; pollCycle: PollCycle };
 }
 
@@ -56,6 +56,12 @@ export interface RealWiring {
   gh?: Partial<GhCliConfig>;
   /** Hẹn giờ tiêm vào cho `PollScheduler` (test). */
   schedule?: (fn: () => void, delayMs: number) => () => void;
+}
+
+/** Ánh xạ cấu hình app sang tham số thuần của `PollCycle` (005b). */
+function toPollProjectConfig(config: AppConfig): PollProjectConfig {
+  const { owner, ownerType, number, statusField, closedStatuses } = config.project;
+  return { owner, ownerType, number, statusField, closedStatuses: [...closedStatuses] };
 }
 
 /** Notifier không làm gì tới khi có toast thật (007). */
