@@ -14,6 +14,23 @@ export const CLAUDE_SCHEMA = {
 export const CLAUDE_SYSTEM_PROMPT =
   "Dịch văn bản tiếng Nhật trong <source> sang tiếng Việt. Giữ nguyên inline code và @mention. Chỉ trả về trường translation.";
 
+/** PHẢI giống `FORBIDDEN_CLI_FLAGS` trong core-translate (cli-config.ts); checks.test.ts giữ hai bên đồng bộ. */
+export const CLAUDE_FORBIDDEN_FLAGS = [
+  "-p", "--print", "--mcp-config", "--tools", "--allowedtools", "--allowed-tools", "--disallowedtools", "--disallowed-tools",
+  "--dangerously-skip-permissions", "--allow-dangerously-skip-permissions", "--add-dir", "--plugin-dir", "--agents",
+  "--permission-mode", "--system-prompt", "--system-prompt-file", "--append-system-prompt", "--append-system-prompt-file",
+  "--json-schema", "--output-format", "--input-format", "--resume", "-r", "--continue", "-c",
+];
+
+/** Cờ cấm đầu tiên trong args (so như checkCliConfig: phần trước "=", không phân biệt hoa thường), hoặc undefined. */
+export function findForbiddenFlag(args) {
+  for (const a of args) {
+    const flag = String(a).split("=")[0].toLowerCase();
+    if (CLAUDE_FORBIDDEN_FLAGS.includes(flag)) return String(a).split("=")[0];
+  }
+  return undefined;
+}
+
 /** PHẢI giống `fixedArgs` trong core-translate (claude-cli-runner.ts); checks.test.ts giữ hai bên đồng bộ. */
 export function claudeFixedArgs(schema, systemPrompt) {
   return [
@@ -54,12 +71,20 @@ export function parseClaudeEnvelope(stdout) {
   let env = pick(tryParse(stdout.trim()));
   if (!env) {
     const lines = stdout.split(/\r?\n/);
-    for (let i = lines.length - 1; i >= 0 && !env; i--) env = pick(tryParse(lines[i].trim()));
+    // Giống findEnvelope của runner: chỉ nhận dòng có `type: "result"` (wrapper có thể in log JSON riêng).
+    for (let i = lines.length - 1; i >= 0 && !env; i--) {
+      const found = pick(tryParse(lines[i].trim()));
+      if (found?.type === "result") env = found;
+    }
   }
   if (!env) return { ok: false, reason: "BAD_OUTPUT" };
   if (env.is_error) return { ok: false, reason: "IS_ERROR" };
   let out = env.structured_output;
-  if (!isObject(out) && typeof env.result === "string") out = tryParse(env.result);
+  if (!isObject(out) && typeof env.result === "string") {
+    // Giống readCliResult của runner: JSON có thể nằm giữa text (vd. trong ```json … ```).
+    const m = /\{[\s\S]*\}/.exec(env.result);
+    out = m ? tryParse(m[0]) : undefined;
+  }
   if (!isObject(out) || typeof out.translation !== "string") return { ok: false, reason: "NO_TRANSLATION" };
   return { ok: true, translation: out.translation };
 }
@@ -184,3 +209,30 @@ export function pickTimeProbe(nodes, k = 5) {
   const t = times[Math.min(k, times.length) - 1] - 1000;
   return isoSecond(new Date(t));
 }
+
+/** Giải nghĩa LastTaskResult của Task Scheduler (chỉ mã, không có dữ liệu máy). */
+export function describeTaskResult(code) {
+  const n = String(code ?? "").trim() === "" ? NaN : Number(code);
+  if (!Number.isFinite(n)) return "không đọc được";
+  const known = {
+    0: "đã chạy xong",
+    1: "process thoát mã 1 (có FAIL hoặc crash)",
+    0x41301: "vẫn đang chạy (quá hạn chờ)",
+    0x41303: "chưa chạy lần nào (task không được khởi động)",
+    0x41306: "bị dừng giữa chừng",
+    0x8007010b: "thư mục làm việc không hợp lệ",
+    0x80070002: "không tìm thấy file chạy (node.exe/script)",
+    0x80070005: "bị từ chối quyền (Access denied)",
+    0x80070569: "user không có quyền logon cho task (GPO)",
+  };
+  const hex = "0x" + (n >>> 0).toString(16).toUpperCase();
+  return `${hex}: ${known[n >>> 0] ?? known[n] ?? "mã lạ"}`;
+}
+
+/** Tổng thời gian chờ task con: --version (60s) + claude -p (timeoutSeconds) + khởi động/toast. */
+export function schedulerDeadlineMs(timeoutSeconds) {
+  const t = Number.isFinite(timeoutSeconds) && timeoutSeconds > 0 ? timeoutSeconds : 300;
+  return (60 + t + 120) * 1000;
+}
+
+export const SCHED_DONE = "done          INFO  hết lượt chạy";

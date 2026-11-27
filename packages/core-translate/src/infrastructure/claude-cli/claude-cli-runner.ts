@@ -116,7 +116,9 @@ export async function runClaudeCli(input: RunClaudeCliInput): Promise<{ body: un
     const stdout = await run(config.command, [...config.args, ...fixedArgs(input.schema, input.systemPrompt)], input.stdin, cwd, config.timeoutSeconds * 1000, config.env ?? {});
     return readCliResult(stdout);
   } finally {
-    await rm(cwd, { recursive: true, force: true });
+    // Dọn dẹp là phụ: trên Windows thư mục có thể còn bị giữ (hook/process con của CLI chưa thoát, antivirus) → EPERM.
+    // Không được để lỗi dọn dẹp thay thế kết quả dịch hoặc CliRunFailure thật. Thư mục tạm rỗng sót lại là vô hại.
+    await rm(cwd, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 }).catch(() => {});
   }
 }
 
@@ -133,14 +135,18 @@ function run(command: string, args: string[], stdin: string, cwd: string, timeou
     let size = 0;
     let err = "";
     let timedOut = false;
+    let overflow = false;
     const timer = setTimeout(() => {
       timedOut = true;
       child.kill("SIGKILL");
     }, timeoutMs);
     child.stdout.on("data", (b: Buffer) => {
+      if (overflow) return;
       size += b.length;
-      if (size > MAX_OUTPUT) child.kill("SIGKILL");
-      else out.push(b);
+      if (size > MAX_OUTPUT) {
+        overflow = true; // output quá lớn là output hỏng, không phải lỗi process
+        child.kill("SIGKILL");
+      } else out.push(b);
     });
     // Giữ đuôi stderr để chẩn đoán (Task Scheduler: PATH, xác thực, encoding). Không đưa ra UI.
     child.stderr.setEncoding("utf8");
@@ -154,6 +160,7 @@ function run(command: string, args: string[], stdin: string, cwd: string, timeou
     child.on("close", (code) => {
       clearTimeout(timer);
       if (timedOut) return reject(new CliRunFailure("timeout", undefined, err));
+      if (overflow) return reject(new CliRunFailure("bad_output", undefined, err));
       if (code !== 0) return reject(new CliRunFailure("process_failed", undefined, err));
       resolve(Buffer.concat(out).toString("utf8"));
     });

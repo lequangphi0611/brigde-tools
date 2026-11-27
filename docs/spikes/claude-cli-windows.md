@@ -18,3 +18,17 @@ Nguồn: `pnpm diagnose` trên máy công ty (người dùng gõ lại kết qu�
 - `timeoutSeconds` mặc định 300 (trước là 120, quá sát).
 - Thông lượng khoảng 100 giây mỗi lần gọi × 2 song song ≈ 70 lần/giờ → **mỗi issue dịch trong một lần gọi** (gộp title + body + các comment mới), không gọi riêng từng đoạn. Ràng buộc này áp vào story 001 và 006.
 - Hook `UserPromptSubmit` của công ty chạy cả với `-p` và nhận nội dung issue. Chấp nhận, nhưng nếu bản dịch lạ thì nghi chỗ này trước.
+
+## Lần 3 (2026-11-27): `--scheduler` sau khi sửa EPERM
+
+| Hạng mục | Kết quả |
+|---|---|
+| Triệu chứng trước khi sửa | `scheduler FAIL task không ghi kết quả`, gốc là `EPERM` ở `rmSync` khi xoá thư mục tạm/file kết quả → task con crash trước khi ghi |
+| Sửa | Xoá best-effort có retry (diagnose và `runClaudeCli`); diagnose báo `claude tmp WARN` thay vì crash; task con ghi từng dòng; hạn chờ = 60s + `timeoutSeconds` + 120s |
+| Qua Task Scheduler | `[sched] claude -p` OK, **8331ms**, vi/code/mention đều true |
+| `claude tmp WARN` | Không xuất hiện → EPERM lần trước nhiều khả năng do khoá tạm thời (antivirus), không phải process giữ cwd. Chưa chắc chắn: theo dõi tiếp, nếu thấy thư mục `ghit-ai-*` sót trong TEMP thì xem lại |
+| `pnpm verify` trên máy chạy | typecheck + unit + lock check xanh; e2e lỗi (chưa ghi nhận nguyên nhân) |
+
+**Ghi chú:**
+- 8,3 giây so với ~100 giây ở lần 2: chênh lệch lớn, **chưa rõ nguyên nhân** (gateway, model, tải lúc đo). Chưa đổi quyết định thông lượng ở trên cho tới khi có thêm số đo.
+- Theo user: e2e chỉ cần chạy ở máy dev, máy chạy app không cần. Trên máy chạy, `pnpm verify` sẽ đỏ ở bước e2e là chấp nhận được; kiểm ở đó bằng `pnpm typecheck && pnpm test` và `diagnose`.

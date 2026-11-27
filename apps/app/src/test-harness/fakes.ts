@@ -17,11 +17,15 @@ export class RecordingNotifier implements Notifier {
 }
 
 export class ControllableClock implements Clock {
-  private current = new Date("2026-01-01T00:00:00Z");
+  static readonly INITIAL = "2026-01-01T00:00:00Z";
+  private current = new Date(ControllableClock.INITIAL);
   now() {
     return new Date(this.current);
   }
   set(iso: string) {
     this.current = new Date(iso);
+  }
+  reset() {
+    this.current = new Date(ControllableClock.INITIAL);
   }
 }

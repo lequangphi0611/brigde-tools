@@ -9,16 +9,16 @@
 //   node scripts/diagnose/index.mjs --owner <org> --number <n> [--owner-type user] [--scheduler] [--toast] [--raw]
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { release, tmpdir } from "node:os";
 import { dirname, extname, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import {
-  CLAUDE_SCHEMA, CLAUDE_SYSTEM_PROMPT, claudeFixedArgs, classifyClaudeFailure, classifyGhError, compareNodes,
+  CLAUDE_SCHEMA, CLAUDE_SYSTEM_PROMPT, claudeFixedArgs, findForbiddenFlag, classifyClaudeFailure, classifyGhError, compareNodes,
   evaluateCounts, evaluateTranslation, hasProjectScope, isoDay, isoSecond, parseClaudeEnvelope, sampleStdin,
-  analyzeFilter, chooseClaude, countAfter, pickTimeProbe,
+  analyzeFilter, chooseClaude, countAfter, pickTimeProbe, describeTaskResult, schedulerDeadlineMs, SCHED_DONE,
 } from "./checks.mjs";
 
 const SCRIPT = fileURLToPath(import.meta.url);
@@ -50,6 +50,15 @@ function say(key, status, detail = "") {
   const l = `${key.padEnd(14)}${status.padEnd(6)}${detail}`.trimEnd();
   lines.push(l);
   console.log(l);
+  // Lượt chạy từ Task Scheduler: ghi từng dòng ngay → crash/quá hạn vẫn thấy đã tới bước nào.
+  if (opt["only-claude"] && opt.out) appendOut(l);
+}
+function appendOut(line) {
+  try {
+    appendFileSync(opt.out, line + "\n", "utf8");
+  } catch (e) {
+    console.error(`không ghi được file kết quả (${e?.code ?? "UNKNOWN"})`);
+  }
 }
 function raw(text) {
   if (opt.raw && text) console.log(`    [raw] ${String(text).trim().replace(/\n/g, "\n          ")}`);
@@ -270,10 +279,15 @@ function resolveClaude() {
   if (existsSync(opt.config)) {
     try {
       const c = JSON.parse(readFileSync(opt.config, "utf8"));
+      const bad = findForbiddenFlag(Array.isArray(c.args) ? c.args : []);
+      if (bad) {
+        say("claude cfg", "FAIL", `config/claude-cli.local.json chứa cờ ${bad} → app sẽ từ chối (app tự đặt hoặc cờ không an toàn)`);
+        return null;
+      }
       return { command: c.command, args: c.args ?? [], env: c.env ?? {}, source: "config", timeoutSeconds: c.timeoutSeconds ?? 300 };
     } catch {
       say("claude cfg", "FAIL", "config/claude-cli.local.json không phải JSON hợp lệ");
-      return undefined;
+      return null;
     }
   }
   const found = runSync(WIN ? "where.exe" : "which", ["claude"]);
@@ -299,6 +313,16 @@ function writeConfig(cfg) {
   say("write config", "OK", "đã ghi config/claude-cli.local.json → thêm --settings vào args hoặc biến vào env nếu cần");
 }
 
+/** Xoá best-effort; trả mã lỗi (vd. EPERM) nếu không xoá được. Trên Windows thư mục có thể còn bị process khác giữ. */
+function tryRm(path) {
+  try {
+    rmSync(path, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    return undefined;
+  } catch (e) {
+    return e?.code ?? "UNKNOWN";
+  }
+}
+
 function runClaude(cfg) {
   return new Promise((done) => {
     const cwd = mkdtempSync(join(tmpdir(), "m0-claude-"));
@@ -306,8 +330,8 @@ function runClaude(cfg) {
     const started = Date.now();
     let out = "", err = "", timedOut = false, child;
     const finish = (r) => {
-      rmSync(cwd, { recursive: true, force: true });
-      done({ ...r, ms: Date.now() - started, out, err, timedOut });
+      const ms = Date.now() - started;
+      done({ ...r, ms, out, err, timedOut, cleanupError: tryRm(cwd) });
     };
     try {
       child = spawn(cfg.command, args, { cwd, env: { ...process.env, ...cfg.env }, shell: false, windowsHide: true, stdio: ["pipe", "pipe", "pipe"] });
@@ -335,6 +359,7 @@ function runClaude(cfg) {
 
 async function checkClaude() {
   const cfg = resolveClaude();
+  if (cfg === null) return; // đã báo lỗi cụ thể
   if (!cfg) {
     say("claude", "FAIL", "không tìm thấy: tạo config/claude-cli.local.json hoặc truyền --claude <đường dẫn tuyệt đối>");
     return;
@@ -351,6 +376,8 @@ async function checkClaude() {
   if (v.status === 0) say("claude ver", "INFO", firstLine(v.stdout ?? ""));
 
   const r = await runClaude(cfg);
+  if (r.cleanupError)
+    say("claude tmp", "WARN", `không xoá được cwd tạm (${r.cleanupError}) → còn process giữ thư mục sau khi claude thoát (hook?) hoặc antivirus`);
   if (r.spawnErrorCode || r.timedOut || r.code !== 0) {
     raw(r.err);
     say("claude -p", "FAIL", `${classifyClaudeFailure({ spawnErrorCode: r.spawnErrorCode, stderr: r.err, timedOut: r.timedOut })} (${r.ms}ms)`);
@@ -369,6 +396,14 @@ async function checkClaude() {
 }
 
 // ---------- Task Scheduler (Windows) ----------
+function configTimeoutSeconds() {
+  try {
+    return existsSync(opt.config) ? JSON.parse(readFileSync(opt.config, "utf8")).timeoutSeconds : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function powershell(script, timeout = 60_000) {
   const b64 = Buffer.from(script, "utf16le").toString("base64");
   return runSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-EncodedCommand", b64], timeout);
@@ -390,18 +425,29 @@ Start-ScheduledTask -TaskName ${psq(name)}`);
     raw(reg.err);
     return say("scheduler", "FAIL", "không tạo/chạy được task (GPO chặn?)");
   }
-  say("scheduler", "INFO", "đã tạo task tạm, đang chờ lượt chạy claude (tối đa ~6 phút)…");
-  const deadline = Date.now() + 360_000;
-  while (!existsSync(out) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 2000));
+  const waitMs = schedulerDeadlineMs(configTimeoutSeconds());
+  say("scheduler", "INFO", `đã tạo task tạm, đang chờ lượt chạy claude (tối đa ~${Math.round(waitMs / 60_000)} phút)…`);
+  const deadline = Date.now() + waitMs;
+  const done = () => existsSync(out) && readFileSync(out, "utf8").includes(SCHED_DONE);
+  while (!done() && Date.now() < deadline) await new Promise((r) => setTimeout(r, 2000));
   await new Promise((r) => setTimeout(r, 500));
-  const info = powershell(`(Get-ScheduledTaskInfo -TaskName ${psq(name)}).LastTaskResult; Unregister-ScheduledTask -TaskName ${psq(name)} -Confirm:$false`);
-  if (!existsSync(out)) return say("scheduler", "FAIL", `task không ghi kết quả (LastTaskResult ${firstLine(info.out) || "?"})`);
-  for (const l of readFileSync(out, "utf8").split(/\r?\n/).filter(Boolean)) {
+  const finished = done();
+  // Quá hạn: dừng task để không để process con chạy ngầm, rồi mới xoá.
+  const info = powershell(`$i = Get-ScheduledTaskInfo -TaskName ${psq(name)}; $i.LastTaskResult
+${finished ? "" : `Stop-ScheduledTask -TaskName ${psq(name)} -ErrorAction SilentlyContinue`}
+Unregister-ScheduledTask -TaskName ${psq(name)} -Confirm:$false`);
+  const result = describeTaskResult(firstLine(info.out));
+  const got = existsSync(out) ? readFileSync(out, "utf8").split(/\r?\n/).filter((l) => l && l !== SCHED_DONE) : [];
+  for (const l of got) {
     lines.push(`[sched] ${l}`);
     console.log(`[sched] ${l}`);
     if (/^\S+\s+FAIL/.test(l)) failures++;
   }
-  rmSync(out, { force: true });
+  tryRm(out);
+  if (!finished) {
+    const last = got.length ? `dừng sau dòng "${got.at(-1).split(/\s+/)[0]}"` : "không ghi dòng nào";
+    return say("scheduler", "FAIL", `task không chạy xong trong ${Math.round(waitMs / 1000)}s, ${last} (LastTaskResult ${result})`);
+  }
   if (opt.toast && process.stdin.isTTY) {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     const seen = (await rl.question('  Có thấy toast "[M0] Toast từ Task Scheduler" không? (y/n) ')).trim().toLowerCase() === "y";
@@ -461,8 +507,16 @@ async function main() {
     if (opt.toast) await checkToast();
     console.log(`\n${failures === 0 ? "Không có FAIL." : `${failures} FAIL.`} Các dòng trên không chứa hostname/owner/nội dung → gõ lại được.`);
   }
-  if (opt.out) writeFileSync(opt.out, lines.join("\n") + "\n", "utf8");
+  if (opt.out && !opt["only-claude"]) writeFileSync(opt.out, lines.join("\n") + "\n", "utf8");
   process.exitCode = failures === 0 ? 0 : 1;
 }
 
-main();
+main()
+  .catch((e) => {
+    say("crash", "FAIL", e?.code ?? e?.name ?? "lỗi lạ"); // không in message: có thể chứa đường dẫn
+    raw(e?.stack);
+    process.exitCode = 1;
+  })
+  .finally(() => {
+    if (opt["only-claude"] && opt.out) appendOut(SCHED_DONE);
+  });

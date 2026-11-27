@@ -27,5 +27,5 @@ Runner dùng chung đặt ở `packages/core-translate/src/infrastructure/claude
 | concurrency mặc định | 1 | 2 | Theo thiết kế (tối đa 2 job song song) |
 
 ## Hệ quả
-- Prompt dịch + schema output (`{ translation }` hoặc theo lô title/body/comment) là việc của adapter `ClaudeCliTranslator` — làm qua `/feature`, không thuộc runner.
+- Prompt dịch + schema output theo lô `{ segments: [{ id, translation }] }` là việc của adapter `ClaudeCliTranslator` (story 001, ADR-0006), không thuộc runner.
 - Chưa kiểm chứng: tên cờ trên bản Claude Code đang cài của người dùng; chạy từ Task Scheduler (xác thực, PATH, UTF-8). → spike (roadmap bước 1).

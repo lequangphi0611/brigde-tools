@@ -10,6 +10,7 @@ export function testHarnessRoutes(deps: { github: FakeGitHub; notifier: Recordin
   r.post("/reset", (c) => {
     deps.github.issues = [];
     deps.notifier.sent.length = 0;
+    deps.clock.reset();
     return c.json({ ok: true });
   });
   r.post("/github/issues", async (c) => {

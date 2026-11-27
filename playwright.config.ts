@@ -13,6 +13,8 @@ export default defineConfig({
   use: { baseURL: "http://127.0.0.1:4317", trace: "off" },
   webServer: {
     command: "pnpm --filter @app/app start:e2e",
+    // Đặt env ở đây thay vì `VAR=x cmd` trong script: cú pháp đó không chạy trên Windows (cmd.exe).
+    env: { APP_ADAPTERS: "fake", PORT: "4317" },
     url: "http://127.0.0.1:4317/api/health",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
