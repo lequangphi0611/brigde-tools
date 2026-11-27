@@ -20,7 +20,7 @@ export {
 } from "./domain/glossary.ts";
 export { FakeTranslator } from "./infrastructure/fake-translator.ts";
 export { ClaudeCliTranslator } from "./infrastructure/claude-cli/claude-cli-translator.ts";
-export { checkCliConfig, loadCliConfig, type CliConfig, type CliConfigResult } from "./infrastructure/claude-cli/cli-config.ts";
+export { checkCliConfig, loadCliConfig, type CliConfig, type CliConfigResult, type CliConfigProblemCode, type CliConfigField, CLI_CONFIG_FIELDS } from "./infrastructure/claude-cli/cli-config.ts";
 export { CliRunFailure, runClaudeCli, readCliResult, fixedArgs, type CliFailureReason } from "./infrastructure/claude-cli/claude-cli-runner.ts";
 export { claudeCliEngineVersion } from "./infrastructure/claude-cli/claude-cli-engine-version.ts";
 export { extractConfiguredModel } from "./infrastructure/claude-cli/cli-config.ts";

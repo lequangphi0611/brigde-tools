@@ -37,7 +37,7 @@ Thiết kế phòng thủ vì không debug được trên máy thật: chỗ nà
 **Quyết định cần chốt khi hết M0:**
 - [x] github.com hay GHES → GHES qua `GH_HOST`
 - [x] ADR-0004: `node:sqlite`; nâng Node máy thật lên ≥ 24.15
-- [x] ADR-0005: PowerShell WinRT. Còn kiểm toast từ Task Scheduler trước 007 (`diagnose --scheduler --toast`)
+- [x] ADR-0005: PowerShell WinRT; toast từ Task Scheduler OK (2026-11-27)
 - [ ] Hai giả định về listen/unlisten trong `vision.md` (chặn M5)
 
 **Xong khi:** dịch được một issue thật từ process do Task Scheduler chạy, và lấy được thay đổi của một project thật bằng một query.
@@ -51,9 +51,11 @@ Thiết kế phòng thủ vì không debug được trên máy thật: chỗ nà
 | 001 ✅ | Dịch ja→vi qua `ClaudeCliTranslator`, **cả issue trong một lần gọi** (title + body + comment mới; ~100s/lần trên máy thật, xem `docs/spikes/claude-cli-windows.md`), giữ nguyên code block, inline code, link, `@mention`; nội dung issue được coi là dữ liệu (khối phân cách, vô hiệu hoá thẻ giả) | Translation | – | M | S0.1 |
 | 002 ✅ | Glossary hai tầng ghép vào prompt (bản của project thắng khi trùng) | Translation | – | S | 001 |
 | 003 ✅ | (Làm sau 004, user đồng ý 2026-11-27 để adapter dùng SQLite ngay) Cache bản dịch theo `hash + direction + glossaryVersion` (port trong core-translate, adapter ở app) | Translation | – | S | 001, 004 |
-| 003b | (Tách từ 003 ở GATE 1, 2026-11-27) Script dịch title + body của một issue thật trên Windows: đầu vào là file JSON người dùng tự xuất bằng `gh issue view <số> --repo <owner/repo> --json title,body` (script không gọi `gh`); dùng `ClaudeCliTranslator` + cache SQLite trong `dataDir`; in bản dịch ra màn hình và một dòng trạng thái hit/miss/engine **không chứa nội dung** để gõ lại được | Translation | – | S | 003 |
+| 003b ✅ | (Tách từ 003 ở GATE 1, 2026-11-27) Script dịch title + body của một issue thật trên Windows: đầu vào là file JSON người dùng tự xuất bằng `gh issue view <số> --repo <owner/repo> --json title,body` (script không gọi `gh`); dùng `ClaudeCliTranslator` + cache SQLite trong `dataDir`; in bản dịch ra màn hình và một dòng trạng thái hit/miss/engine **không chứa nội dung** để gõ lại được | Translation | – | S | 003 |
 
 **Xong khi:** script của 003b dịch được title + body của một issue thật trên Windows, chạy lần hai thì lấy từ cache (dòng trạng thái báo không gọi engine).
+
+✅ **Đạt 2026-11-27** (`docs/spikes/claude-cli-windows.md` Lần 5). Cần đo thêm thời gian theo độ dài issue trước 006.
 
 ---
 

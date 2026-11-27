@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveDataDir } from "./data-dir.ts";
+import { dataDirSource, resolveDataDir } from "./data-dir.ts";
 
 describe("resolveDataDir (AC-10)", () => {
   it("APP_DATA_DIR tuyệt đối được trả nguyên trên mọi nền tảng", () => {
@@ -60,5 +60,21 @@ describe("resolveDataDir (AC-10)", () => {
     ] as const) {
       expect(resolveDataDir(env, platform, home).startsWith(cwd)).toBe(false);
     }
+  });
+});
+
+describe("dataDirSource (003b)", () => {
+  it("khớp nguồn mà resolveDataDir chọn", () => {
+    expect(dataDirSource({ APP_DATA_DIR: "/x", XDG_DATA_HOME: "/y" }, "linux")).toBe("APP_DATA_DIR");
+    expect(dataDirSource({ APP_DATA_DIR: "rel" }, "linux")).toBe("APP_DATA_DIR");
+    expect(dataDirSource({ LOCALAPPDATA: "C:\\L" }, "win32")).toBe("LOCALAPPDATA");
+    expect(dataDirSource({ XDG_DATA_HOME: "/y" }, "linux")).toBe("XDG_DATA_HOME");
+  });
+
+  it("rỗng, tương đối hoặc không đặt → fallback", () => {
+    expect(dataDirSource({}, "linux")).toBe("fallback");
+    expect(dataDirSource({ APP_DATA_DIR: "", XDG_DATA_HOME: "rel" }, "linux")).toBe("fallback");
+    expect(dataDirSource({ LOCALAPPDATA: "rel" }, "win32")).toBe("fallback");
+    expect(dataDirSource({ LOCALAPPDATA: "C:\\L" }, "linux")).toBe("fallback");
   });
 });

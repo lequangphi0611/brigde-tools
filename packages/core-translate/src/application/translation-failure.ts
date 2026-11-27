@@ -8,6 +8,8 @@ export class TranslationFailure extends Error {
     readonly detail?: string,
     /** Từ CliRunFailure, chỉ để log local. */
     readonly stderrTail?: string,
+    /** Chỉ với not_configured: tên key của cấu hình bị lỗi (không kèm giá trị). */
+    readonly field?: string,
   ) {
     super(message ?? reason);
     this.name = "TranslationFailure";

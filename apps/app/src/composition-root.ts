@@ -1,4 +1,12 @@
-import { CachingTranslator, FakeTranslator, type Translator } from "@app/core-translate";
+import path from "node:path";
+import {
+  CachingTranslator,
+  ClaudeCliTranslator,
+  FakeTranslator,
+  claudeCliEngineVersion,
+  type CachingObserver,
+  type Translator,
+} from "@app/core-translate";
 import { systemClock, type Clock } from "./shared/ports/clock.port.ts";
 import type { GitHubGateway } from "./shared/ports/github-gateway.port.ts";
 import type { Notifier } from "./shared/ports/notifier.port.ts";
@@ -46,4 +54,58 @@ export function buildDeps(mode: string | undefined): Deps {
   // TODO(spike): adapter thật — ClaudeCliTranslator, GhCliGateway, WindowsToastNotifier.
   void systemClock;
   throw new Error("Real adapters chưa được implement. Chạy với APP_ADAPTERS=fake.");
+}
+
+export interface RealTranslatorOptions {
+  /** File cấu hình Claude CLI (ADR-0003). Đọc lại mỗi lần dịch. */
+  configPath: string;
+  storage: Database;
+  clock: Clock;
+  observer?: CachingObserver;
+  /** Bọc `Translator` bên trong cache (vd. đếm số lần gọi engine); không đổi hành vi nếu bỏ qua. */
+  wrapInner?: (inner: Translator) => Translator;
+}
+
+/**
+ * Translator thật: `CachingTranslator(ClaudeCliTranslator)` với cache SQLite (003, 003b).
+ * Cùng một đường lắp cho `translate-issue` và nhánh adapter thật của server (005).
+ */
+export function buildRealTranslator(options: RealTranslatorOptions): Translator {
+  const { configPath, storage, clock, observer, wrapInner } = options;
+  const engine = new ClaudeCliTranslator(configPath);
+  return new CachingTranslator({
+    inner: wrapInner ? wrapInner(engine) : engine,
+    cache: new SqliteTranslationCache(storage, clock),
+    engineVersion: () => claudeCliEngineVersion(configPath),
+    ...(observer ? { observer } : {}),
+  });
+}
+
+export interface RealTranslationRuntimeOptions {
+  /** Thư mục dữ liệu app (đã resolve); DB nằm ở `<dataDir>/app.db`. */
+  dataDir: string;
+  configPath: string;
+  observer?: CachingObserver;
+  wrapInner?: (inner: Translator) => Translator;
+}
+
+export interface RealTranslationRuntime {
+  translator: Translator;
+  /** Người gọi đóng khi xong. */
+  storage: Database;
+}
+
+/**
+ * Storage thật + translator thật cho CLI (`translate-issue`), cùng đồng hồ hệ thống.
+ * Lỗi mở DB ném `StorageError`; lỗi sau khi đã mở thì DB được đóng trước khi ném lại.
+ */
+export function openRealTranslationRuntime(options: RealTranslationRuntimeOptions): RealTranslationRuntime {
+  const { dataDir, ...rest } = options;
+  const storage = openAppStorage({ path: path.join(dataDir, "app.db") });
+  try {
+    return { storage, translator: buildRealTranslator({ ...rest, storage, clock: systemClock }) };
+  } catch (e) {
+    storage.close();
+    throw e;
+  }
 }

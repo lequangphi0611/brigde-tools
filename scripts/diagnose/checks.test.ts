@@ -22,6 +22,21 @@ describe("diagnose checks", () => {
     expect(c.findForbiddenFlag(["--allowedTools=Bash"])).toBe("--allowedTools");
   });
 
+  it("findConfigRangeProblem khớp checkCliConfig (khoảng, trường)", () => {
+    const base = { command: "claude" };
+    for (const [field, [min, max]] of Object.entries(c.CLAUDE_CONFIG_RANGES) as Array<[string, [number, number]]>) {
+      for (const v of [min - 1, min, max, max + 1, 1.5, "x"]) {
+        const diag = c.findConfigRangeProblem({ ...base, [field]: v });
+        const app = checkCliConfig({ ...base, [field]: v }, "linux");
+        expect(diag === undefined, `${field}=${String(v)}`).toBe(app.ok);
+        if (diag) expect(app).toMatchObject({ field: diag.field });
+      }
+    }
+    expect(c.findConfigRangeProblem({ timeoutSeconds: 3000 })).toEqual({ field: "timeoutSeconds", min: 10, max: 1800, value: 3000 });
+    expect(c.findConfigRangeProblem({ timeoutSeconds: "3000" })).toMatchObject({ field: "timeoutSeconds", value: undefined });
+    expect(c.findConfigRangeProblem({})).toBeUndefined();
+  });
+
   it("giải nghĩa LastTaskResult và tính hạn chờ scheduler", () => {
     expect(c.describeTaskResult("267009")).toBe("0x41301: vẫn đang chạy (quá hạn chờ)");
     expect(c.describeTaskResult(-2147024894)).toBe("0x80070002: không tìm thấy file chạy (node.exe/script)");

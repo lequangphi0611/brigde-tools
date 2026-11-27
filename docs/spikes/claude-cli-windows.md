@@ -32,3 +32,35 @@ Nguồn: `pnpm diagnose` trên máy công ty (người dùng gõ lại kết qu�
 **Ghi chú:**
 - 8,3 giây so với ~100 giây ở lần 2: chênh lệch lớn, **chưa rõ nguyên nhân** (gateway, model, tải lúc đo). Chưa đổi quyết định thông lượng ở trên cho tới khi có thêm số đo.
 - Theo user: e2e chỉ cần chạy ở máy dev, máy chạy app không cần. Trên máy chạy, `pnpm verify` sẽ đỏ ở bước e2e là chấp nhận được; kiểm ở đó bằng `pnpm typecheck && pnpm test` và `diagnose`.
+
+## Lần 4 (2026-11-27): diagnose đầy đủ `--scheduler --toast`
+
+| Hạng mục | Kết quả |
+|---|---|
+| Môi trường | Node v24.9.0 (ADR-0004 yêu cầu ≥ 24.15, `node:sqlite` vẫn chạy và in `ExperimentalWarning`), pnpm 10.28.0, `node:sqlite file` OK (WAL, nguồn `LOCALAPPDATA`) |
+| `claude -p` trong terminal | OK, **15912ms**, vi/code/mention true, không sót tiếng Nhật |
+| Qua Task Scheduler | `[sched] claude -p` OK, **11875ms** |
+| `claude tmp` | **WARN EPERM ở cả terminal lẫn Task Scheduler** |
+
+**Số đo thời gian tới nay:** khoảng 100s (lần 2), 8,3s (lần 3), 15,9s và 11,9s (lần 4). Ba lần gần nhất đều dưới 16s, nên lần ~100s có vẻ là ngoại lệ (gateway hoặc tải lúc đo), nhưng mới có 4 mẫu với câu ngắn, chưa đo issue dài. Ràng buộc "một lần gọi cho mỗi issue" vẫn hợp lý (rẻ hơn, ít phụ thuộc thông lượng). Giới hạn 2 job song song của 006 nên xem lại khi làm 006.
+
+**EPERM ở cwd tạm:** lần 3 không thấy, lần 4 thấy ở cả hai ngữ cảnh → không còn coi là khoá tạm thời hiếm gặp. Nguyên nhân chưa rõ: hook của công ty (process con còn giữ cwd) hoặc antivirus. Hệ quả: thư mục `ghit-ai-*` có thể dồn lại trong TEMP sau mỗi lần dịch. Cần một cơ chế dọn bù (vd. lúc khởi động quét và xoá các thư mục `ghit-ai-*` cũ hơn một ngưỡng) trước khi app chạy nền lâu dài.
+
+## Lần 5 (2026-11-27): `pnpm -s translate-issue` (003b) trên issue thật
+
+| Lần chạy | Dòng trạng thái (rút gọn) |
+|---|---|
+| 1 | `FAIL translate:timeout enc=utf16le-bom jaChars=0 srcChars=1450 … ms=120058` |
+| 2 | Giống hệt lần 1 (lỗi không ghi cache, đúng thiết kế) |
+| 3 | `FAIL translate:not_configured` sau khi đặt `timeoutSeconds: 3000` (vượt max 1800 của schema) |
+| 4 | `OK enc=utf16le-bom jaChars=195 srcChars=1024 segments=2 hits=0 misses=2 engine=called ms=153842 cache=ok tmpLeft=0` |
+| 5 | `OK … hits=2 misses=0 engine=skipped ms=4 cache=ok tmpLeft=0` |
+
+**Rút ra:**
+- **Tiêu chí xong M1 đạt:** dịch title + body issue thật trên Windows, lần hai lấy từ cache, không gọi engine.
+- `jaChars=0` ở lần 1–2: file xuất bằng `>` của PowerShell 5.1 đã mất tiếng Nhật trước khi vào file (rủi ro đã dự báo trong spec 003b). Xuất lại đúng cách thì UTF-16LE có BOM đọc bình thường (`jaChars=195`).
+- Timeout 120s đến từ `config/claude-cli.local.json` cũ trên máy, không phải mặc định của code (300). Lần 3 cho thấy `not_configured` không nói lý do → đã thêm `detail=` / `field=` (003b, sửa sau chạy thật).
+- **Thời gian:** 1024 ký tự mất **154s**, so với 12–16s cho câu mẫu của diagnose. Thời gian có vẻ tăng theo độ dài nội dung, nhưng mới có 2 điểm đo nên chưa kết luận. Với 300s, timeout chỉ dư khoảng 2 lần; issue dài hoặc job gộp nhiều comment có thể hết giờ. **Cần đo thêm** (một issue dài, một issue ngắn) trước story 006 để chọn: timeout tăng theo số ký tự, hay trần kích thước job.
+- **Chất lượng bản dịch:** user tự đọc `vi.md` và xác nhận dịch chuẩn (không gửi nội dung ra ngoài).
+- `tmpLeft=0` ở mọi lần: EPERM chưa làm thư mục `ghit-ai-*` dồn lại.
+- Node v24.9 vẫn in `ExperimentalWarning` của `node:sqlite` (chấp nhận, nâng Node theo ADR-0004).

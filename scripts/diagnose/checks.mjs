@@ -31,6 +31,24 @@ export function findForbiddenFlag(args) {
   return undefined;
 }
 
+/** PHẢI giống khoảng của CliConfigSchema trong core-translate (cli-config.ts); checks.test.ts giữ đồng bộ. */
+export const CLAUDE_CONFIG_RANGES = {
+  timeoutSeconds: [10, 1800],
+  concurrency: [1, 4],
+  maxInputChars: [100, 200_000],
+};
+
+/** Trường số đầu tiên sai kiểu/ngoài khoảng, hoặc undefined. Giá trị số in được; giá trị khác kiểu thì không in. */
+export function findConfigRangeProblem(cfg) {
+  for (const [field, [min, max]] of Object.entries(CLAUDE_CONFIG_RANGES)) {
+    const v = cfg?.[field];
+    if (v === undefined) continue;
+    if (typeof v !== "number" || !Number.isInteger(v)) return { field, min, max, value: undefined };
+    if (v < min || v > max) return { field, min, max, value: v };
+  }
+  return undefined;
+}
+
 /** PHẢI giống `fixedArgs` trong core-translate (claude-cli-runner.ts); checks.test.ts giữ hai bên đồng bộ. */
 export function claudeFixedArgs(schema, systemPrompt) {
   return [

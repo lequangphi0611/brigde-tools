@@ -29,7 +29,7 @@ export class ClaudeCliTranslator implements Translator {
   async translate(request: TranslationRequest): Promise<TranslationResult> {
     assertValidTranslationRequest(request);
     const loaded = await loadCliConfig(this.configPath);
-    if (!loaded.ok) throw new TranslationFailure("not_configured", loaded.problem);
+    if (!loaded.ok) throw new TranslationFailure("not_configured", loaded.problem, loaded.code, undefined, loaded.field);
     const config = loaded.config;
 
     const prepared = request.segments.map((s) => ({ id: s.id, text: s.text, ...protect(s.text) }));

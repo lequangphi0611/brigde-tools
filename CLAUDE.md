@@ -21,6 +21,7 @@ pnpm e2e                            # Playwright; tự build web và chạy app 
 pnpm e2e e2e/specs/<file>.spec.ts   # một file e2e
 pnpm tokens                         # sinh apps/app/web/src/styles/tokens.css từ tokens.json
 pnpm diagnose                       # kiểm M0 trên máy Windows thật (GH_HOST, Projects v2, claude -p, --scheduler, --toast); không cần install
+pnpm -s translate-issue <file.json> [--config <path>] [--out <file>]  # dịch title+body của một issue (JSON xuất bằng gh) bằng claude -p thật, cache vào app.db; in dòng trạng thái cuối
 pnpm dev                            # chạy app (hiện chỉ chạy được với APP_ADAPTERS=fake)
 ```
 

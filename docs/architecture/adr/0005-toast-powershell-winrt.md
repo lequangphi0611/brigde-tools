@@ -21,6 +21,6 @@ Chọn 2 cho MVP. Adapter `PowerShellToastNotifier` hiện thực port `Notifier
 
 ## Hệ quả
 - Không thêm dependency. Test bằng `RecordingNotifier` như hiện tại. Riêng adapter thật có test đơn vị cho phần dựng XML và escape.
-- **Chưa kiểm:** toast gửi từ process chạy nền do Task Scheduler khởi động (spike mới chạy trong terminal tương tác). Cần thêm vào `diagnose --scheduler` trước story 007.
+- **Đã kiểm (2026-11-27):** toast gửi từ process do Task Scheduler khởi động hiện bình thường (`diagnose --scheduler --toast`, xem `docs/spikes/windows-toast.md`).
 - Nếu người dùng tắt thông báo của PowerShell, hoặc đang bật Focus Assist, thì toast không hiện. Trang tình trạng nên có nút "gửi toast thử".
 - Sau MVP có thể chuyển sang lựa chọn 3 khi làm bộ cài (story 020).

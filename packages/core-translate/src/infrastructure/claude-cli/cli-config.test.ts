@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { TranslationFailure } from "../../application/translation-failure.ts";
 import { claudeCliEngineVersion } from "./claude-cli-engine-version.ts";
-import { extractConfiguredModel } from "./cli-config.ts";
+import { checkCliConfig, extractConfiguredModel, loadCliConfig } from "./cli-config.ts";
 import { CLAUDE_CLI_PROMPT_VERSION } from "./translation-prompt.ts";
 
 describe("extractConfiguredModel", () => {
@@ -55,5 +55,46 @@ describe("claudeCliEngineVersion", () => {
     await expect(claudeCliEngineVersion(path)).rejects.toBeInstanceOf(TranslationFailure);
     await writeFile(path, JSON.stringify({ command: "" }));
     await expect(claudeCliEngineVersion(path)).rejects.toMatchObject({ reason: "not_configured" });
+  });
+});
+
+describe("mã lỗi cấu hình (003b)", () => {
+  let d: string;
+  beforeEach(async () => {
+    d = await mkdtemp(join(tmpdir(), "ghit-cfgcode-"));
+  });
+  afterEach(() => rm(d, { recursive: true, force: true }));
+
+  it("config_invalid kèm tên trường, không kèm giá trị", () => {
+    const r = checkCliConfig({ command: "claude", timeoutSeconds: 3000 }, "linux");
+    expect(r).toMatchObject({ ok: false, code: "config_invalid", field: "timeoutSeconds" });
+    if (r.ok) throw new Error("unreachable");
+    expect(r.problem).toContain("timeoutSeconds phải là số nguyên 10–1800");
+    expect(r.problem).not.toContain("3000");
+    expect(checkCliConfig({ command: "claude", concurrency: 9 }, "linux")).toMatchObject({ field: "concurrency" });
+    expect(checkCliConfig({ command: "claude", env: { "a b": "x" } }, "linux")).toMatchObject({ field: "env" });
+    expect(checkCliConfig({}, "linux")).toMatchObject({ field: "command" });
+    expect(checkCliConfig([], "linux")).toMatchObject({ code: "config_invalid" });
+    expect(checkCliConfig([], "linux")).not.toHaveProperty("field");
+  });
+
+  it("forbidden_flag, command_cmd_bat", () => {
+    expect(checkCliConfig({ command: "claude", args: ["--tools", ""] }, "linux")).toMatchObject({ code: "forbidden_flag", field: "args" });
+    expect(checkCliConfig({ command: "C:\\x\\claude.cmd" }, "win32")).toMatchObject({ code: "command_cmd_bat", field: "command" });
+  });
+
+  it("loadCliConfig: config_missing, config_not_json", async () => {
+    expect(await loadCliConfig(join(d, "none.json"))).toMatchObject({ ok: false, code: "config_missing" });
+    await writeFile(join(d, "bad.json"), "{ không phải json");
+    expect(await loadCliConfig(join(d, "bad.json"))).toMatchObject({ ok: false, code: "config_not_json" });
+  });
+
+  it("claudeCliEngineVersion ném not_configured mang mã và trường", async () => {
+    await writeFile(join(d, "c.json"), JSON.stringify({ command: "claude", timeoutSeconds: 3000 }));
+    await expect(claudeCliEngineVersion(join(d, "c.json"))).rejects.toMatchObject({
+      reason: "not_configured",
+      detail: "config_invalid",
+      field: "timeoutSeconds",
+    });
   });
 });
