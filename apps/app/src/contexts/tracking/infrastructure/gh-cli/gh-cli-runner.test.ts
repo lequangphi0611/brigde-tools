@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
 import { contractFixture } from "../../../../shared/ports/testing/github-gateway.contract.ts";
 import { GitHubFailure, type GitHubFailureReason } from "../../../../shared/ports/github-gateway.port.ts";
-import { DEFAULT_GH_CLI_CONFIG, runGhCli, type GhCliConfig, type GhGraphqlRequest } from "./gh-cli-runner.ts";
+import { DEFAULT_GH_CLI_CONFIG, runGhCli, treeKillCommand, type GhCliConfig, type GhGraphqlRequest } from "./gh-cli-runner.ts";
 
 const FAKE = join(dirname(fileURLToPath(import.meta.url)), "testing", "fake-gh.mjs");
 const OWNER = 'o"; drop';
@@ -160,5 +160,18 @@ describe("runGhCli", () => {
   it("AC-7 stdout vượt giới hạn -> bad_output", async () => {
     const f = await failure(setup("huge", { maxStdoutBytes: 1024 * 1024 }, { FAKE_GH_HUGE_BYTES: String(3 * 1024 * 1024) }).config);
     expect(f.reason).toBe("bad_output");
+  });
+});
+
+describe("treeKillCommand", () => {
+  it("Windows: taskkill /pid <pid> /T /F", () => {
+    expect(treeKillCommand("win32", 1234)).toEqual({ command: "taskkill", args: ["/pid", "1234", "/T", "/F"] });
+  });
+
+  it("nơi khác hoặc pid không hợp lệ: null (dùng SIGKILL)", () => {
+    expect(treeKillCommand("linux", 1234)).toBeNull();
+    expect(treeKillCommand("darwin", 1234)).toBeNull();
+    expect(treeKillCommand("win32", undefined)).toBeNull();
+    expect(treeKillCommand("win32", 0)).toBeNull();
   });
 });

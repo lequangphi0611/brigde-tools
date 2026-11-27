@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { GitHubFailure, type GitHubFailureReason } from "../../../../shared/ports/github-gateway.port.ts";
 import { classifyGhFailure } from "./gh-failure.ts";
 
@@ -89,6 +89,25 @@ function hasErrors(parsed: unknown): boolean {
   return isObject(parsed) && Array.isArray(parsed.errors) && parsed.errors.length > 0;
 }
 
+/** Lệnh diệt cả cây process trên Windows (kill() chỉ diệt gh.exe, process con giữ pipe). Nơi khác: null, dùng SIGKILL. */
+export function treeKillCommand(platform: NodeJS.Platform, pid: number | undefined): { command: string; args: string[] } | null {
+  if (platform !== "win32" || pid === undefined || !Number.isInteger(pid) || pid <= 0) return null;
+  return { command: "taskkill", args: ["/pid", String(pid), "/T", "/F"] };
+}
+
+function killTree(child: ChildProcess): void {
+  const cmd = treeKillCommand(process.platform, child.pid);
+  if (cmd) {
+    try {
+      const killer = spawn(cmd.command, cmd.args, { shell: false, windowsHide: true, stdio: "ignore" });
+      killer.on("error", () => {});
+    } catch {
+      // bỏ qua: vẫn kill gh trực tiếp bên dưới
+    }
+  }
+  child.kill("SIGKILL");
+}
+
 function spawnGh(config: GhCliConfig, stdin: string): Promise<Finished> {
   return new Promise((resolve, reject) => {
     let child;
@@ -115,7 +134,7 @@ function spawnGh(config: GhCliConfig, stdin: string): Promise<Finished> {
     }, config.timeoutMs);
     // Kill + đóng pipe rồi reject ngay, không đợi 'close': process con của gh có thể giữ pipe (Windows) nên 'close' không bao giờ phát.
     const abort = (f: GitHubFailure) => {
-      child.kill("SIGKILL");
+      killTree(child);
       child.stdout.destroy();
       child.stderr.destroy();
       fail(f);
