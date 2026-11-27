@@ -1,6 +1,6 @@
 # ADR-0010: Đọc Projects v2 qua `gh api graphql`, quét toàn bộ rồi lấy chi tiết theo lô
 
-- Trạng thái: Proposed (story 005a; GATE 1 duyệt hướng 2026-11-27; số đo `diagnose` Lần 4 đã chốt các điểm (a)–(e) bên dưới và đã implement; chờ user duyệt cuối story để sang Accepted)
+- Trạng thái: Accepted (2026-11-27, user duyệt cuối story 005a; số đo `diagnose` Lần 4 đã chốt (a)–(e))
 - Ngày: 2026-11-27
 - Liên quan: ADR-0002 (port + fake), ADR-0003 (mẫu runner process an toàn), spike S0.2 (`docs/spikes/projects-v2-polling.md`), story 005a (`docs/features/005a-github-gateway/spec.md`), 005b (poller, dùng port này)
 

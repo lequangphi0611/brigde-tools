@@ -1,6 +1,6 @@
 # 005a — Adapter GitHub: `GhCliGateway` + `github-check`
 
-- Trạng thái: approved (GATE 1, 2026-11-27)
+- Trạng thái: done (2026-11-27; `github-check` trên máy thật chạy trước khi merge)
 - Context: Tracking (adapter `GhCliGateway` cho port `GitHubGateway` trong `shared/ports`; lệnh vận hành `github-check`; thêm dòng cho `diagnose`)
 - Cần UI: không
 
@@ -394,3 +394,4 @@ Không còn câu hỏi chặn 005a. Các điểm "Cần kiểm chứng" (`--inpu
 - Test tạo thư mục tạm (`fake-gh-*`, `gh-runner-test-*`) và không dọn.
 - Test đặt `GH_HOST` qua env của process con/`config.env`; một số chỗ dựa vào `process.env` thừa kế từ máy chạy test.
 - `github-check.process.test.ts` bị skip trên Windows (spawn không shell không chạy được shim `.cmd`); trên máy thật kiểm bằng chạy `github-check`.
+| 7 PR | 2026-11-27 | GATE 4: user duyệt tạo PR, chạy `github-check` trên máy thật trước khi merge. ADR-0010 → Accepted. Review vòng 2 APPROVED (nit: kill trên Windows chỉ diệt `gh.exe`, không diệt cây process) |
