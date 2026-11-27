@@ -71,7 +71,8 @@ export function neutralizeTerm(s: string): string {
  * một đoạn. So trên text đã che nên thuật ngữ chỉ nằm trong phần giữ nguyên không được chọn. Giữ thứ tự của `glossary`.
  */
 export function relevantTerms(glossary: Glossary, maskedTexts: ReadonlyArray<string>, direction: Direction): Glossary {
-  const haystacks = maskedTexts.map((t) => normalizeTermText(t).toLowerCase());
+  // Chỗ giữ `⟦N⟧` thành "\n": thuật ngữ đã chuẩn hoá không chứa "\n" nên không khớp được vào số của chỗ giữ.
+  const haystacks = maskedTexts.map((t) => normalizeTermText(t).toLowerCase().replace(/⟦\d+⟧/g, "\n"));
   return glossary.filter((term) => {
     const needle = neutralizeTerm(normalizeTermText(term[direction.from])).toLowerCase();
     return needle !== "" && haystacks.some((h) => h.includes(needle));
@@ -80,11 +81,13 @@ export function relevantTerms(glossary: Glossary, maskedTexts: ReadonlyArray<str
 
 /** Phiên bản của một tập thuật ngữ: không đổi khi đổi thứ tự hay dạng full/half-width, đổi khi thêm/xoá/đổi `vi`. */
 export function glossaryVersion(terms: Glossary): string {
-  const canonical = terms
-    .map((t) => ({ ja: normalizeTermText(t.ja), vi: normalizeTermText(t.vi) }))
-    .sort((a, b) => compareCodeUnits(a.ja.toLowerCase(), b.ja.toLowerCase()))
-    .map((t) => `${t.ja}\u0000${t.vi}`)
-    .join("\u0001");
+  assertValidGlossary(terms); // trùng khoá/rỗng → Error, để kết quả không phụ thuộc thứ tự
+  const canonical = JSON.stringify(
+    terms
+      .map((t) => ({ ja: normalizeTermText(t.ja), vi: normalizeTermText(t.vi) }))
+      .sort((a, b) => compareCodeUnits(a.ja.toLowerCase(), b.ja.toLowerCase()))
+      .map((t) => [t.ja, t.vi]),
+  );
   return `g1-${createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16)}`;
 }
 

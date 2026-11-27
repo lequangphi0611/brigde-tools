@@ -32,7 +32,7 @@ Là người đọc issue tiếng Nhật của nhiều project, tôi muốn thu�
 - Giữ thứ tự của `glossary` (đã sắp theo khoá).
 
 **Phiên bản glossary** `glossaryVersion(terms: Glossary) → string` (domain, thuần, xác định):
-- `"g1-" + 16 ký tự hex đầu của sha256` trên dạng chuẩn tắc: các cặp `(ja, vi)` đã chuẩn hoá, sắp theo `termKey`, nối bằng ký tự phân cách không xuất hiện được trong dữ liệu đã chuẩn hoá (vd `\u0000` giữa ja/vi, `\u0001` giữa các cặp). Đổi thứ tự đầu vào hoặc đổi dạng full/half-width không đổi version; thêm, xoá, đổi `vi` thì đổi version.
+- `"g1-" + 16 ký tự hex đầu của sha256` trên dạng chuẩn tắc: các cặp `(ja, vi)` đã chuẩn hoá, sắp theo `termKey`, tuần tự hoá bằng `JSON.stringify` của mảng các cặp `[ja, vi]` (không nhập nhằng dù `ja`/`vi` chứa ký tự bất kỳ). `glossaryVersion` gọi `assertValidGlossary` trước nên trùng khoá/rỗng ném `Error`. Đổi thứ tự đầu vào hoặc đổi dạng full/half-width không đổi version; thêm, xoá, đổi `vi` thì đổi version.
 - Danh sách rỗng → hằng `GLOSSARY_VERSION_EMPTY` (= kết quả của hàm với danh sách rỗng, export thành hằng).
 - 002 chỉ cung cấp hàm. Story 003 chọn: version của **cả glossary** (`glossaryVersion(glossary)`) hay của **thuật ngữ liên quan tới từng đoạn** (`glossaryVersion(relevantTerms(glossary, [protect(text).masked], direction))`). Analyst khuyên cách thứ hai (xem ADR-0007 và Câu hỏi mở 3).
 

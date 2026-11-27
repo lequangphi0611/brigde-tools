@@ -29,10 +29,10 @@ describe("mergeGlossary", () => {
       { ja: "納品", vi: "bàn giao" },
     ];
     const expected = [
-      { ja: "課題", vi: "issue" },
       { ja: "担当者", vi: "người phụ trách" },
       { ja: "納品", vi: "bàn giao" },
-    ].sort((a, b) => (termKey(a.ja) < termKey(b.ja) ? -1 : 1));
+      { ja: "課題", vi: "issue" },
+    ];
     expect(mergeGlossary(common, project)).toEqual(expected);
     expect(mergeGlossary([...common].reverse(), [...project].reverse())).toEqual(expected);
     expect(mergeGlossary(common, project)).toHaveLength(3);
@@ -91,8 +91,8 @@ describe("glossaryVersion", () => {
 
   it("AC-4 dạng g1-+16 hex, giá trị cố định giữa các process", () => {
     expect(glossaryVersion(G)).toMatch(/^g1-[0-9a-f]{16}$/);
-    expect(glossaryVersion(G)).toBe("g1-b7480f539c293581");
-    expect(GLOSSARY_VERSION_EMPTY).toBe("g1-e3b0c44298fc1c14");
+    expect(glossaryVersion(G)).toBe("g1-f464d1cb8fa755c7");
+    expect(GLOSSARY_VERSION_EMPTY).toBe("g1-4f53cda18c2baa0c");
   });
 
   it("AC-4 bất biến với thứ tự và dạng chuẩn hoá", () => {
@@ -111,6 +111,15 @@ describe("glossaryVersion", () => {
     for (const x of variants) expect(glossaryVersion(x)).not.toBe(v);
     expect(glossaryVersion([])).toBe(GLOSSARY_VERSION_EMPTY);
     for (const x of [G, ...variants]) expect(glossaryVersion(x)).not.toBe(GLOSSARY_VERSION_EMPTY);
+  });
+
+  it("không va chạm khi ja/vi chứa ký tự phân cách", () => {
+    expect(glossaryVersion([{ ja: "a\u0000b", vi: "c" }])).not.toBe(glossaryVersion([{ ja: "a", vi: "b\u0000c" }]));
+    expect(glossaryVersion([{ ja: "a\u0001b", vi: "c" }])).not.toBe(glossaryVersion([{ ja: "a", vi: "b\u0001c" }]));
+  });
+
+  it("trùng khoá thì ném Error (kết quả không phụ thuộc thứ tự)", () => {
+    expect(() => glossaryVersion([{ ja: "API", vi: "x" }, { ja: "ａｐｉ", vi: "y" }])).toThrow(Error);
   });
 });
 
@@ -158,6 +167,12 @@ describe("relevantTerms", () => {
   it("thuật ngữ độc hại không khớp vào chỗ giữ thật", () => {
     const g = [{ ja: "⟦1⟧", vi: "x" }];
     expect(relevantTerms(g, masked("`code` ok"), ja2vi)).toEqual([]);
+  });
+
+  it("thuật ngữ toàn chữ số không khớp vào số của chỗ giữ", () => {
+    const g = [{ ja: "1", vi: "một" }];
+    expect(relevantTerms(g, masked("`x` こんにちは"), ja2vi)).toEqual([]);
+    expect(relevantTerms(g, masked("`x` 1件"), ja2vi)).toEqual(g);
   });
 
   it("chọn theo direction.from", () => {
