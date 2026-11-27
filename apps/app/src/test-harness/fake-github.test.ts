@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { runGitHubGatewayContract } from "../shared/ports/github-gateway.contract.ts";
+import { runGitHubGatewayContract } from "../shared/ports/testing/github-gateway.contract.ts";
 import { FakeGitHub, SCAN_PAGE_SIZE } from "./fakes.ts";
-import { issue } from "../shared/ports/github-gateway.contract.ts";
+import { issue } from "../shared/ports/testing/github-gateway.contract.ts";
 
 runGitHubGatewayContract("FakeGitHub", {
   create: (fixture) => {

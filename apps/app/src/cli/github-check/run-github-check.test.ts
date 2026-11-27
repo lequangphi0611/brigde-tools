@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { issue } from "../../shared/ports/github-gateway.contract.ts";
+import { issue } from "../../shared/ports/testing/github-gateway.contract.ts";
 import type { GitHubCommentSnapshot } from "../../shared/ports/github-gateway.port.ts";
 import { GhCliGateway } from "../../contexts/tracking/infrastructure/gh-cli/gh-cli-gateway.ts";
 import { setupFakeGh } from "../../contexts/tracking/infrastructure/gh-cli/testing/fake-gh-setup.ts";

@@ -1,9 +1,9 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
-import { contractFixture } from "../../../../shared/ports/github-gateway.contract.ts";
+import { afterAll, describe, expect, it } from "vitest";
+import { contractFixture } from "../../../../shared/ports/testing/github-gateway.contract.ts";
 import { GitHubFailure, type GitHubFailureReason } from "../../../../shared/ports/github-gateway.port.ts";
 import { DEFAULT_GH_CLI_CONFIG, runGhCli, type GhCliConfig, type GhGraphqlRequest } from "./gh-cli-runner.ts";
 
@@ -11,8 +11,14 @@ const FAKE = join(dirname(fileURLToPath(import.meta.url)), "testing", "fake-gh.m
 const OWNER = 'o"; drop';
 const MARKER_HOST = "ghes.example.test";
 
+const tempDirs: string[] = [];
+afterAll(() => {
+  for (const d of tempDirs.splice(0)) rmSync(d, { recursive: true, force: true });
+});
+
 function setup(mode: string, extra: Partial<GhCliConfig> = {}, env: Record<string, string> = {}) {
   const dir = mkdtempSync(join(tmpdir(), "gh-runner-test-"));
+  tempDirs.push(dir);
   const fixture = join(dir, "fixture.json");
   const record = join(dir, "record.jsonl");
   writeFileSync(fixture, JSON.stringify(contractFixture()));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CONTRACT_PROJECT, contractFixture, issue, runGitHubGatewayContract } from "../../../../shared/ports/github-gateway.contract.ts";
+import { CONTRACT_PROJECT, contractFixture, issue, runGitHubGatewayContract } from "../../../../shared/ports/testing/github-gateway.contract.ts";
 import { GitHubFailure, type GitHubFailureReason, type ProjectRef } from "../../../../shared/ports/github-gateway.port.ts";
 import type { FixtureItem, GitHubFixture } from "../../../../test-harness/github-fixture.ts";
 import { DETAIL_BATCH, GhCliGateway } from "./gh-cli-gateway.ts";

@@ -1,18 +1,24 @@
 import { spawn } from "node:child_process";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
-import { contractFixture, issue } from "../../../../../shared/ports/github-gateway.contract.ts";
+import { afterAll, describe, expect, it } from "vitest";
+import { contractFixture, issue } from "../../../../../shared/ports/testing/github-gateway.contract.ts";
 import type { FixtureItem, GitHubFixture } from "../../../../../test-harness/github-fixture.ts";
 
 const FAKE = join(dirname(fileURLToPath(import.meta.url)), "fake-gh.mjs");
+
+const tempDirs: string[] = [];
+afterAll(() => {
+  for (const d of tempDirs.splice(0)) rmSync(d, { recursive: true, force: true });
+});
 
 interface Result { code: number | null; stdout: string; stderr: string }
 
 function run(body: unknown, opts: { mode?: string; fixture?: GitHubFixture; args?: string[]; env?: Record<string, string> } = {}): Promise<Result & { record: Array<Record<string, any>> }> {
   const dir = mkdtempSync(join(tmpdir(), "fake-gh-test-"));
+  tempDirs.push(dir);
   const fixturePath = join(dir, "fixture.json");
   const recordPath = join(dir, "record.jsonl");
   writeFileSync(fixturePath, JSON.stringify(opts.fixture ?? contractFixture()));

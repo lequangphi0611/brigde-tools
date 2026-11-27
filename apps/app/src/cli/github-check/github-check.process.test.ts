@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:f
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { afterAll, describe, expect, it } from "vitest";
-import { contractFixture } from "../../shared/ports/github-gateway.contract.ts";
+import { contractFixture } from "../../shared/ports/testing/github-gateway.contract.ts";
 
 // Spawn đúng lệnh người dùng gõ (`pnpm -s github-check`) với một `gh` giả đứng đầu PATH.
 // Windows: spawn không shell không chạy được .cmd nên bỏ qua; kiểm trên máy thật bằng github-check.

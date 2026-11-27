@@ -7,7 +7,7 @@ Mục tiêu: Claude implement được mà **không cần** GitHub thật, `clau
 | Tầng | Công cụ | Phạm vi | Ai viết |
 |---|---|---|---|
 | Unit | Vitest, `*.test.ts` cạnh code | domain + application, dùng fake port | `implementer` (TDD) |
-| Adapter | Vitest, cạnh adapter | Adapter thật với hệ ngoài **giả ở mức process**: Claude CLI → `fake-claude-cli.mjs` (mode ok/slow/hang/garbage/fail/wrapped, ghi lại argv/stdin/cwd). `gh` → `fake-gh.mjs` (`contexts/tracking/infrastructure/gh-cli/testing/`; fixture JSON qua `FAKE_GH_FIXTURE`, mode qua `FAKE_GH_MODE`: ok/partial/auth/scope/project-null/not-resolved/unsupported/network/hang/fail/garbage/bad-shape/huge, ghi argv/stdin/env vào `FAKE_GH_RECORD`). Port `GitHubGateway` có contract test chung `shared/ports/github-gateway.contract.ts` chạy cho cả `FakeGitHub` và `GhCliGateway` + fake gh; fixture board dùng chung ở `test-harness/github-fixture.ts` | `implementer` |
+| Adapter | Vitest, cạnh adapter | Adapter thật với hệ ngoài **giả ở mức process**: Claude CLI → `fake-claude-cli.mjs` (mode ok/slow/hang/garbage/fail/wrapped, ghi lại argv/stdin/cwd). `gh` → `fake-gh.mjs` (`contexts/tracking/infrastructure/gh-cli/testing/`; fixture JSON qua `FAKE_GH_FIXTURE`, mode qua `FAKE_GH_MODE`: ok/partial/auth/scope/project-null/not-resolved/unsupported/network/hang/fail/garbage/bad-shape/huge, ghi argv/stdin/env vào `FAKE_GH_RECORD`). Port `GitHubGateway` có contract test chung `shared/ports/testing/github-gateway.contract.ts` chạy cho cả `FakeGitHub` và `GhCliGateway` + fake gh; fixture board dùng chung ở `test-harness/github-fixture.ts` | `implementer` |
 | E2E | Playwright, `e2e/specs` | Hành vi người dùng qua UI + toast | `e2e-writer`, **khoá** sau khi user duyệt |
 
 ## Chạy app ở chế độ fake

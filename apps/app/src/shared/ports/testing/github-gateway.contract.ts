@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { FixtureItem, GitHubFixture } from "../../test-harness/github-fixture.ts";
-import type { GitHubCommentSnapshot, GitHubGateway, GitHubIssueSnapshot, ProjectRef } from "./github-gateway.port.ts";
+import type { FixtureItem, GitHubFixture } from "../../../test-harness/github-fixture.ts";
+import type { GitHubCommentSnapshot, GitHubGateway, GitHubIssueSnapshot, ProjectRef } from "../github-gateway.port.ts";
 
 /**
  * Bộ hợp đồng chung cho mọi `GitHubGateway` (ADR-0002, AC-9): `FakeGitHub` và `GhCliGateway` + fake gh
