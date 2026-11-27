@@ -37,3 +37,4 @@
 - Không phát hiện được file migration đã áp dụng bị sửa (không lưu checksum). Dựa vào quy ước + reviewer.
 - Đổi vị trí `dataDir` về sau cần bước chuyển file. Cần kiểm chứng `%LOCALAPPDATA%` có mặt khi app chạy từ Task Scheduler (dòng `[sched]` của `diagnose`).
 - Nếu sau này bundle app thì phải copy kèm `migrations/*.sql` (runner đọc thư mục này lúc chạy; liên quan 020/021).
+- Runner chạy mỗi migration trong `BEGIN IMMEDIATE` với `foreign_keys=ON`. `PRAGMA foreign_keys=OFF` viết trong file migration **không có tác dụng** (pragma này bị bỏ qua trong transaction). Story đầu tiên cần dựng lại bảng có khoá ngoại trỏ tới (DROP/RENAME bảng cha, nhất là có `ON DELETE CASCADE`) phải sửa runner trước: tắt `foreign_keys` ngoài transaction cho migration đó, chạy `PRAGMA foreign_key_check` trước COMMIT, rồi bật lại. Nếu không, DROP bảng cha sẽ xoá dây chuyền dữ liệu bảng con.
