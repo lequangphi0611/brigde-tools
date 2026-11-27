@@ -123,6 +123,9 @@ const AUTOLINK = /<[a-zA-Z][a-zA-Z0-9+.-]{1,31}:[^\s<>]*>/y;
 const BARE_URL = /https?:\/\/[^\s<>`　-〿＀-￯]+/y;
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/y;
 const MENTION = /@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\/[A-Za-z0-9._-]+)?/y;
+// Thẻ phân cách của prompt (source|segment|context), mở hoặc đóng, ASCII hoặc toàn chiều rộng, cho phép khoảng trắng bên trong.
+// Che từ dấu mở tới dấu đóng `>`/`＞` cùng dòng (nếu có) để model không thấy cả thuộc tính.
+const FAKE_TAG = /[<＜]\s*\/?\s*(?:source|segment|context)\b[^<>＜＞\n]*[>＞]?/iy;
 const FAKE_PLACEHOLDER = /⟦\d*⟧/y;
 const EMAIL_LOCAL = /[A-Za-z0-9._%+-]/;
 const WORD = /[A-Za-z0-9_]/;
@@ -167,6 +170,14 @@ function scanInline(text: string, region: Range): Range[] {
       if (close !== -1) push(i, close + n);
       else i += n;
       continue;
+    }
+
+    if (c === "<" || c === "＜") {
+      const tag = sticky(FAKE_TAG, text, i);
+      if (tag && i + tag[0].length <= end) {
+        push(i, i + tag[0].length);
+        continue;
+      }
     }
 
     if (c === "<") {
