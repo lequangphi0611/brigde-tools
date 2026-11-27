@@ -1,5 +1,6 @@
+import { DatabaseSync } from "node:sqlite";
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -47,5 +48,39 @@ describe("openAppStorage", () => {
       expect((e as StorageError).reason).toBe("schema_too_new");
     }
     expect(sha()).toBe(before);
+  });
+
+  const sha = (f: string) => createHash("sha256").update(readFileSync(f)).digest("hex");
+
+  it("S1: DB rollback-journal có user_version lớn hơn → schema_too_new, file không đổi byte nào", () => {
+    const file = path.join(dir, "old.db");
+    const raw = new DatabaseSync(file);
+    raw.exec("CREATE TABLE x (a TEXT); PRAGMA user_version = 5");
+    raw.close();
+    const before = sha(file);
+    expect(() => openAppStorage({ path: file })).toThrowError(expect.objectContaining({ reason: "schema_too_new" }));
+    expect(sha(file)).toBe(before);
+    expect(existsSync(`${file}-wal`)).toBe(false);
+  });
+
+  it("S1: DB rollback-journal hỏng giữa file → corrupt, file không đổi", () => {
+    const file = path.join(dir, "bad.db");
+    const raw = new DatabaseSync(file);
+    raw.exec("CREATE TABLE t (id INTEGER PRIMARY KEY, v TEXT)");
+    const ins = raw.prepare("INSERT INTO t (v) VALUES (?)");
+    for (let i = 0; i < 2000; i++) ins.run("x".repeat(100) + i);
+    raw.close();
+    const buf = readFileSync(file);
+    buf.fill(0xff, 8192, 8192 + 4096);
+    writeFileSync(file, buf);
+    const before = sha(file);
+    expect(() => openAppStorage({ path: file })).toThrowError(expect.objectContaining({ reason: "corrupt" }));
+    expect(sha(file)).toBe(before);
+  });
+
+  it("DB mới tạo bằng openAppStorage ở chế độ wal", () => {
+    const db = openAppStorage({ path: path.join(dir, "n.db") });
+    expect(db.raw.prepare("PRAGMA journal_mode").get()).toMatchObject({ journal_mode: "wal" });
+    db.close();
   });
 });

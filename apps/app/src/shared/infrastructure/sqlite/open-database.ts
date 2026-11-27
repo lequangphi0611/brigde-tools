@@ -11,13 +11,19 @@ export interface Database {
   /** Chạy fn trong `BEGIN IMMEDIATE … COMMIT`; ném lỗi thì ROLLBACK và ném lại nguyên vẹn. Không lồng. */
   transaction<T>(fn: () => T): T;
   schemaVersion(): number;
+  /** Chuyển file sang journal_mode=WAL (không làm gì với ":memory:"). Ghi header, nên chỉ gọi sau khi kiểm xong. */
+  enableWal(): void;
   close(): void;
 }
 
-function isCorruptionCode(code: number | undefined): boolean {
+export function isCorruptionCode(code: number | undefined): boolean {
   if (code === undefined) return false;
   const primary = code & 0xff;
   return primary === SQLITE_CORRUPT || primary === SQLITE_NOTADB;
+}
+
+function enableWalOn(raw: DatabaseSync, path: string): void {
+  if (path !== ":memory:") raw.exec("PRAGMA journal_mode = WAL");
 }
 
 export function transactionOn(raw: DatabaseSync, fn: () => unknown): unknown {
@@ -38,11 +44,11 @@ export function transactionOn(raw: DatabaseSync, fn: () => unknown): unknown {
  * Mở DB (file hoặc ":memory:") với pragma chuẩn và kiểm hỏng. Không xoá/đổi tên/ghi đè file.
  * node:sqlite mở file rác không lỗi ngay; lỗi chỉ xuất hiện ở câu lệnh đầu tiên nên mọi bước nằm trong try.
  */
-export function openDatabase(path: string): Database {
+export function openDatabase(path: string, opts: { wal?: boolean } = {}): Database {
+  const wal = opts.wal ?? true;
   let raw: DatabaseSync | undefined;
   try {
     raw = new Sqlite(path);
-    if (path !== ":memory:") raw.exec("PRAGMA journal_mode = WAL");
     raw.exec("PRAGMA foreign_keys = ON");
     raw.exec("PRAGMA busy_timeout = 5000");
     const check = raw.prepare("PRAGMA quick_check").all() as Array<Record<string, unknown>>;
@@ -50,6 +56,8 @@ export function openDatabase(path: string): Database {
     if (!ok) {
       throw new StorageError("corrupt", "File DB không qua quick_check", { sqliteCode: SQLITE_CORRUPT });
     }
+    // WAL ghi header file: chỉ đổi sau khi quick_check OK (opts.wal=false để caller kiểm thêm rồi tự gọi enableWal).
+    if (wal) enableWalOn(raw, path);
   } catch (e) {
     try {
       raw?.close();
@@ -71,6 +79,7 @@ export function openDatabase(path: string): Database {
       const row = db.prepare("PRAGMA user_version").get() as { user_version: number };
       return row.user_version;
     },
+    enableWal: () => enableWalOn(db, path),
     close: () => db.close(),
   };
 }

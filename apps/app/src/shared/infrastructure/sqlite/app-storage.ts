@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { migrate } from "./migrations.ts";
+import { assertSchemaNotTooNew, loadMigrations, runMigrations } from "./migrations.ts";
 import { openDatabase, type Database } from "./open-database.ts";
 import { StorageError, sqliteErrorInfo } from "./storage-error.ts";
 
@@ -14,9 +14,13 @@ export function openAppStorage(opts: { path: string }): Database {
       throw new StorageError("open_failed", `Không tạo được thư mục dữ liệu${code ? ` (${code})` : ""}`, sqliteErrorInfo(e));
     }
   }
-  const db = openDatabase(opts.path);
+  const migrations = loadMigrations();
+  // Không ghi gì (kể cả đổi sang WAL) trước khi quick_check OK và biết schema không quá mới.
+  const db = openDatabase(opts.path, { wal: false });
   try {
-    migrate(db);
+    assertSchemaNotTooNew(db, migrations.length);
+    db.enableWal();
+    runMigrations(db, migrations);
   } catch (e) {
     db.close();
     throw e;

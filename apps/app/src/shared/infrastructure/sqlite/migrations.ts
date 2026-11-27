@@ -50,6 +50,14 @@ export function loadMigrations(dir: string = MIGRATIONS_DIR): Migration[] {
   }));
 }
 
+/** DB có phiên bản schema lớn hơn migration cao nhất app biết → `schema_too_new` (không sửa gì). */
+export function assertSchemaNotTooNew(db: Database, latest: number): void {
+  const current = db.schemaVersion();
+  if (current > latest) {
+    throw new StorageError("schema_too_new", `DB ở phiên bản schema ${current}, app chỉ biết tới ${latest}`);
+  }
+}
+
 /**
  * Áp dụng các migration chưa chạy theo `PRAGMA user_version`. Mỗi migration một transaction.
  * Trả danh sách số migration vừa áp dụng.
@@ -59,13 +67,7 @@ export function runMigrations(db: Database, migrations: readonly Migration[]): n
   assertContiguous(sorted.map((m) => m.number));
 
   const current = db.schemaVersion();
-  const latest = sorted.length;
-  if (current > latest) {
-    throw new StorageError(
-      "schema_too_new",
-      `DB ở phiên bản schema ${current}, app chỉ biết tới ${latest}`,
-    );
-  }
+  assertSchemaNotTooNew(db, sorted.length);
 
   const applied: number[] = [];
   for (const migration of sorted) {
