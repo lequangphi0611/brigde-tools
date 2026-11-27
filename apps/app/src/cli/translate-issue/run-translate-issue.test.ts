@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { DatabaseSync } from "node:sqlite";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
-import { runTranslateIssue } from "./run-translate-issue.ts";
+import { runTranslateIssue, runTranslateIssueSafely } from "./run-translate-issue.ts";
 
 const FAKE = fileURLToPath(new URL("../../../../../packages/core-translate/src/infrastructure/claude-cli/testing/fake-claude-cli.mjs", import.meta.url));
 const root = mkdtempSync(path.join(tmpdir(), "ghit-run-"));
@@ -244,5 +244,15 @@ describe("AC-13: dòng trạng thái không chứa dữ liệu", () => {
       expect(r.last).not.toContain(hostname());
       expect(/^[\x20-\x7e]+$/.test(r.last)).toBe(true);
     }
+  });
+});
+
+describe("runTranslateIssueSafely", () => {
+  it("lỗi không lường trước → FAIL internal, exit 1, không lộ message", async () => {
+    let out = "";
+    const argv = { filter: () => { throw new TypeError("ZZSECRETZZ"); } } as unknown as string[];
+    const code = await runTranslateIssueSafely({ argv, env: {}, cwd: work, stdout: { write: (c) => void (out += c) }, stderr: { write: () => {} } });
+    expect(code).toBe(1);
+    expect(out).toBe("translate-issue FAIL internal code=TypeError\n");
   });
 });

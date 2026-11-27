@@ -208,7 +208,8 @@ export async function runTranslateIssue(options: RunTranslateIssueOptions): Prom
       try {
         await writeFile(outPath, Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(block, "utf8")]));
       } catch (e) {
-        return fail(1, "output_write", safeCode(e) ? { code: safeCode(e)! } : {});
+        const code = safeCode(e);
+        return fail(1, "output_write", code ? { code } : {});
       }
     }
     return finish(0, "OK");
@@ -237,5 +238,20 @@ export async function runTranslateIssue(options: RunTranslateIssueOptions): Prom
     }
     const name = e instanceof Error && /^[A-Za-z0-9_]+$/.test(e.name) ? e.name : undefined;
     return fail(1, "internal", name ? { code: name } : {});
+  }
+}
+
+/** Lớp ngoài cùng cho `main`: lỗi không lường trước vẫn ra một dòng trạng thái `internal`, không in message/stack. */
+export async function runTranslateIssueSafely(options: RunTranslateIssueOptions): Promise<number> {
+  try {
+    return await runTranslateIssue(options);
+  } catch (e) {
+    const name = e instanceof Error && /^[A-Za-z0-9_]+$/.test(e.name) ? e.name : undefined;
+    try {
+      options.stdout.write(formatStatusLine({ outcome: "FAIL", code: "internal", fields: name ? { code: name } : {} }) + "\n");
+    } catch {
+      // stdout hỏng: chỉ còn exit code
+    }
+    return 1;
   }
 }
