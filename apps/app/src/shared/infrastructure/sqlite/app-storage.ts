@@ -14,7 +14,7 @@ export function openAppStorage(opts: { path: string }): Database {
       throw new StorageError("open_failed", `Không tạo được thư mục dữ liệu${code ? ` (${code})` : ""}`, sqliteErrorInfo(e));
     }
   }
-  const migrations = loadMigrations();
+  const migrations = loadMigrationsOrThrow();
   // Không ghi gì (kể cả đổi sang WAL) trước khi quick_check OK và biết schema không quá mới.
   const db = openDatabase(opts.path, { wal: false });
   try {
@@ -22,10 +22,25 @@ export function openAppStorage(opts: { path: string }): Database {
     db.enableWal();
     runMigrations(db, migrations);
   } catch (e) {
-    db.close();
+    try {
+      db.close();
+    } catch {
+      // bỏ qua: đang báo lỗi gốc
+    }
     throw toStorageError(e);
   }
   return db;
+}
+
+/** Lỗi đọc thư mục migrations (vd bundle thiếu `migrations/`) cũng thành StorageError, không crash thô. */
+function loadMigrationsOrThrow() {
+  try {
+    return loadMigrations();
+  } catch (e) {
+    if (e instanceof StorageError) throw e;
+    const code = (e as { code?: string }).code;
+    throw new StorageError("invalid_migrations", `Không đọc được thư mục migration${code ? ` (${code})` : ""}`);
+  }
 }
 
 /** Lỗi SQLite thô (vd BUSY khi bật WAL) thành StorageError để main.ts in dòng [storage] thay vì crash. */

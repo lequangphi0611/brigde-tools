@@ -39,6 +39,13 @@ describe("resolveDataDir (AC-10)", () => {
     expect(resolveDataDir({}, "darwin", "/Users/u")).toBe("/Users/u/.local/share/gh-issue-translator");
   });
 
+  it("LOCALAPPDATA / XDG_DATA_HOME tương đối bị bỏ qua", () => {
+    expect(resolveDataDir({ XDG_DATA_HOME: "rel" }, "linux", "/home/u")).toBe("/home/u/.local/share/gh-issue-translator");
+    expect(resolveDataDir({ LOCALAPPDATA: "rel" }, "win32", "C:\\Users\\u")).toBe(
+      "C:\\Users\\u\\AppData\\Local\\gh-issue-translator",
+    );
+  });
+
   it("chuỗi rỗng coi như không đặt", () => {
     expect(resolveDataDir({ APP_DATA_DIR: "", XDG_DATA_HOME: "" }, "linux", "/home/u")).toBe(
       "/home/u/.local/share/gh-issue-translator",

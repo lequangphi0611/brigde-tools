@@ -35,7 +35,11 @@ export function transactionOn(raw: DatabaseSync, fn: () => unknown): unknown {
     return result;
   } catch (e) {
     // node:sqlite để transaction mở khi exec lỗi giữa chừng: rollback tường minh.
-    if (raw.isTransaction) raw.exec("ROLLBACK");
+    try {
+      if (raw.isTransaction) raw.exec("ROLLBACK");
+    } catch {
+      // bỏ qua: ném lỗi gốc thay vì lỗi ROLLBACK
+    }
     throw e;
   }
 }

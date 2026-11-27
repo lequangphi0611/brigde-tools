@@ -248,10 +248,10 @@ export function diagnoseDataDir(env, platform, homedir) {
     return { dir: env.APP_DATA_DIR, source: "APP_DATA_DIR" };
   }
   if (platform === "win32") {
-    if (env.LOCALAPPDATA) return { dir: join(env.LOCALAPPDATA, name), source: "LOCALAPPDATA" };
+    if (env.LOCALAPPDATA && isAbs(env.LOCALAPPDATA)) return { dir: join(env.LOCALAPPDATA, name), source: "LOCALAPPDATA" };
     return { dir: join(homedir, "AppData", "Local", name), source: "fallback" };
   }
-  if (env.XDG_DATA_HOME) return { dir: join(env.XDG_DATA_HOME, name), source: "XDG_DATA_HOME" };
+  if (env.XDG_DATA_HOME && isAbs(env.XDG_DATA_HOME)) return { dir: join(env.XDG_DATA_HOME, name), source: "XDG_DATA_HOME" };
   return { dir: join(homedir, ".local", "share", name), source: "fallback" };
 }
 
