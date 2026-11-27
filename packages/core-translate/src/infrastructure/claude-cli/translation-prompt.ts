@@ -62,7 +62,7 @@ export interface PromptSegment {
 /** Hint không được dịch và không có chỗ khôi phục → chỉ làm mờ thẻ giả và ký tự chỗ giữ, không che gì khác. */
 export function neutralizeHint(hint: string): string {
   return hint
-    .replace(/[<＜](?=[\s​-‍﻿]*[\/／]?[\s​-‍﻿]*(?:source|segment|context|glossary)\b)/gi, "‹")
+    .replace(/[<＜](?=[\s\p{Cf}]*[\/／]?[\s\p{Cf}]*(?:source|segment|context|glossary)\b)/giu, "‹")
     .replaceAll("⟦", "⟨")
     .replaceAll("⟧", "⟩");
 }

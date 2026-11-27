@@ -29,7 +29,10 @@ export function planBatches(
   maxInputChars: number,
 ): BatchPlan {
   const items: BatchItem[] = segments.map((s, i) => ({ id: s.id, masked: s.masked, key: `s${i + 1}` }));
-  const fits = (batch: ReadonlyArray<BatchItem>): boolean => buildTranslationStdin(hint, batchTerms(glossary, batch, direction), batch, direction).length <= maxInputChars;
+  // Thuật ngữ liên quan của từng đoạn tính một lần; thuật ngữ của lô = hợp các đoạn, giữ thứ tự glossary (= batchTerms).
+  const termsOf = new Map(items.map((it) => [it, new Set(batchTerms(glossary, [it], direction))]));
+  const termsFor = (batch: ReadonlyArray<BatchItem>): Glossary => glossary.filter((t) => batch.some((it) => termsOf.get(it)!.has(t)));
+  const fits = (batch: ReadonlyArray<BatchItem>): boolean => buildTranslationStdin(hint, termsFor(batch), batch, direction).length <= maxInputChars;
   if (items.some((it) => !fits([it]))) return { ok: false, reason: "input_too_large" };
 
   const batches: BatchItem[][] = [];

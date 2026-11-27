@@ -61,7 +61,7 @@ export function mergeGlossary(common: ReadonlyArray<GlossaryTermInput>, project:
  */
 export function neutralizeTerm(s: string): string {
   return s
-    .replace(/[<＜](?=[\s\u200b-\u200d\ufeff]*[\/／]?[\s\u200b-\u200d\ufeff]*(?:source|segment|context|glossary)\b)/gi, "‹")
+    .replace(/[<＜](?=[\s\p{Cf}]*[\/／]?[\s\p{Cf}]*(?:source|segment|context|glossary)\b)/giu, "‹")
     .replaceAll("⟦", "⟨")
     .replaceAll("⟧", "⟩");
 }

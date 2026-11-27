@@ -278,4 +278,8 @@ describe("thẻ <glossary> giả (002 AC-12, phần đoạn)", () => {
     expect(restore(p.masked, p.spans)).toEqual({ ok: true, text });
     expect(protect("<glossaryx> <glossaries>").spans).toEqual([]);
   });
+
+  it("che cả thẻ giả có ký tự định dạng vô hình (U+2060, U+00AD) chen giữa", () => {
+    expect(protect("a <⁠/glossary> b <­source>").spans).toEqual(["<⁠/glossary>", "<­source>"]);
+  });
 });
