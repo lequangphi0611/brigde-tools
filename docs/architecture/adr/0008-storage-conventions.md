@@ -36,3 +36,4 @@
 - Thứ tự migration phụ thuộc thứ tự merge story: hai nhánh cùng thêm `0002` sẽ xung đột tên file (dễ thấy, sửa bằng đánh lại số trước khi merge).
 - Không phát hiện được file migration đã áp dụng bị sửa (không lưu checksum). Dựa vào quy ước + reviewer.
 - Đổi vị trí `dataDir` về sau cần bước chuyển file. Cần kiểm chứng `%LOCALAPPDATA%` có mặt khi app chạy từ Task Scheduler (dòng `[sched]` của `diagnose`).
+- Nếu sau này bundle app thì phải copy kèm `migrations/*.sql` (runner đọc thư mục này lúc chạy; liên quan 020/021).
