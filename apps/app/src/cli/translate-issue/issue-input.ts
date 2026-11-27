@@ -6,9 +6,11 @@ export type InputErrorCode = "input_encoding" | "input_not_json" | "input_bad_sh
 export type DecodeResult = { readonly enc: InputEncoding; readonly text: string } | { readonly error: "input_encoding" };
 export type ParseResult = { readonly title: string; readonly body: string } | { readonly error: "input_not_json" | "input_bad_shape" };
 
-/** Giải mã theo BOM: UTF-8 (có/không BOM), UTF-16LE có BOM. UTF-16BE hoặc byte UTF-8 sai → `input_encoding`. */
+/** Giải mã theo BOM: UTF-8 (có/không BOM), UTF-16LE có BOM. UTF-16BE, UTF-32LE hoặc byte UTF-8 sai → `input_encoding`. */
 export function decodeInputBytes(bytes: Uint8Array): DecodeResult {
   try {
+    // UTF-32LE BOM (FF FE 00 00) bắt đầu giống UTF-16LE: không hỗ trợ.
+    if (bytes.length >= 4 && bytes[0] === 0xff && bytes[1] === 0xfe && bytes[2] === 0 && bytes[3] === 0) return { error: "input_encoding" };
     if (bytes.length >= 2 && bytes[0] === 0xff && bytes[1] === 0xfe) {
       const text = new TextDecoder("utf-16le", { fatal: true, ignoreBOM: true }).decode(bytes.subarray(2));
       return { enc: "utf16le-bom", text };

@@ -21,6 +21,7 @@ describe("decodeInputBytes (AC-5)", () => {
 
   it("từ chối UTF-16BE, UTF-8 sai byte, UTF-16LE cụt", () => {
     expect(decodeInputBytes(Buffer.from([0xfe, 0xff, 0x00, 0x7b]))).toEqual({ error: "input_encoding" });
+    expect(decodeInputBytes(Buffer.from([0xff, 0xfe, 0x00, 0x00, 0x7b, 0x00, 0x00, 0x00]))).toEqual({ error: "input_encoding" });
     expect(decodeInputBytes(Buffer.from([0x7b, 0xff, 0xfe, 0x7d]))).toEqual({ error: "input_encoding" });
     expect(decodeInputBytes(Buffer.from([0xff, 0xfe, 0x7b]))).toEqual({ error: "input_encoding" });
   });

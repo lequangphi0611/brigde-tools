@@ -1,6 +1,6 @@
 import { runTranslateIssueSafely } from "./run-translate-issue.ts";
 
-// Nối runTranslateIssue với process. pnpm chạy script trong apps/app nhưng INIT_CWD giữ thư mục người dùng gõ lệnh.
+// Nối runTranslateIssue với process. Root script chạy ở thư mục gốc repo nhưng INIT_CWD giữ thư mục người dùng gõ lệnh.
 const code = await runTranslateIssueSafely({
   argv: process.argv.slice(2),
   env: process.env,
