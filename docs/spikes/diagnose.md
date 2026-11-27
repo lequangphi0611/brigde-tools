@@ -147,3 +147,45 @@ github-check OK host=GH_HOST items=286 issues=278 skipped=pr:5,draft:3,noaccess:
 Lỗi: `github-check FAIL <mã>`. Exit 2 = đầu vào sai (`usage`, `gh_host_unset`); exit 1 = `github:<reason>` (`gh_not_found`, `not_authenticated`, `scope_missing`, `project_not_found`, `projects_v2_unsupported`, `network`, `timeout`, `process_failed`, `bad_output`) hoặc `internal`.
 
 Ghi kết quả vào `docs/spikes/projects-v2-polling.md` (Lần 5).
+
+## Kiểm poller (005b/005c)
+
+Kiểm `pnpm start` (nhánh adapter thật: `gh` thật, DB thật, `PollScheduler`) trên máy Windows thật. Không dịch, không toast. Cần `pnpm install`, `GH_HOST` đã đặt, và `gh` đã đăng nhập. Nên kiểm trước bằng `pnpm -s github-check --owner <user> --owner-type user --number <n>` (xem mục trên); `FAIL project_not_found` / `scope_missing` thì dừng và báo lại.
+
+Tạo `%LOCALAPPDATA%\gh-issue-translator\config.json` (app không tự tạo; thư mục `dataDir` có thể chưa có, tự tạo):
+
+```json
+{ "project": { "owner": "<user hoặc org>", "ownerType": "user", "number": <n>, "closedStatuses": ["<tên cột đóng nếu có>"] }, "pollIntervalMin": 1 }
+```
+
+Mặc định: `ownerType` "org", `statusField` "Status", `closedStatuses` [], `pollIntervalMin` 5 (số nguyên 1–60), `claudeCliConfig` `config/claude-cli.local.json` trong repo (chưa dùng ở 005c, file không cần tồn tại). Khoá lạ bị bỏ qua. Đổi cấu hình thì chạy lại app.
+
+Chạy `pnpm start` (không phải `pnpm dev`, vốn chỉ chạy fake). Dòng cần gõ lại là dòng `[startup]`, `[storage]` (trừ dòng `db=` / `config=`, để tự đọc) và `[poll]`.
+
+| Bước | Thao tác | Dòng mong đợi |
+|---|---|---|
+| 1 | Khởi động lần đầu | `[poll] BASELINE issues=<số issue trên board> closed=<…> skipped=… pages=<…> ms=<…>` |
+| 2 | Chờ một chu kỳ, không làm gì | `[poll] OK … details=0 new=0 newComments=0 edited=0 …` |
+| 3 | Comment vào một issue đang mở | `[poll] OK … details=1 … newComments=1 …` |
+| 4 | Sửa body issue đó | `[poll] OK … edited=1 …` |
+| 5 | Comment vào issue đã đóng (hoặc kéo issue có comment mới sang cột close) | `[poll] OK … details=0 … closedChanged=1 newComments=0 …` |
+| 6 | Ctrl+C rồi chạy lại `pnpm start` | dòng `[poll]` đầu là `OK …` (không phải `BASELINE`), `new=0` |
+| 7 | Bỏ `GH_HOST` rồi chạy | `[startup] FAIL gh_host_unset` |
+
+Dòng `[poll]` (chỉ mã và số đếm, không owner, số project, hostname, tên field/Status, title, nội dung):
+
+| Trường | Ý nghĩa |
+|---|---|
+| `issues`, `closed`, `skipped`, `pages` | Từ lần quét board; `closed` = số issue đóng theo `state` hoặc `closedStatuses` |
+| `details`, `missing` | Số id lấy chi tiết; số id không còn đọc được |
+| `new` | Issue mới thấy |
+| `newComments` | Số comment mới trong các issue có comment mới |
+| `edited` | Số nội dung bị sửa |
+| `closedChanged` | Số issue đóng mà lẽ ra phải xem (có `updatedAt` mới, hoặc mới vào board) |
+| `failed` | Số issue rollback vì lỗi lưu trữ; > 0 thì chữ đầu là `PARTIAL` |
+| `warn=` | Chỉ có khi Status field không dùng được |
+| `ms` | Thời gian cả chu kỳ |
+
+Lỗi khởi động (exit 2): `[startup] FAIL gh_host_unset` · `data_dir_invalid data=<nguồn>` · `config_missing` (kèm dòng riêng `[startup] config=<đường dẫn>`) · `config_invalid field=<field>` (`(root)` = không phải JSON/object; field như `project.number`, `pollIntervalMin`, `project.closedStatuses.0`). Lỗi lưu trữ (exit 1): `[storage] FAIL <reason>[ migration=N][ sqlite=C]: <message>` kèm dòng riêng `[storage] db=<đường dẫn>`. `gh` chưa đăng nhập / thiếu scope / mạng lỗi không chặn khởi động: chu kỳ in `[poll] FAIL github:<reason> ms=…` rồi thử lại chu kỳ sau.
+
+Ghi số đo vào `docs/spikes/projects-v2-polling.md` (Lần 5). `closed=` ở bước 1 lệch số thấy trên board thì kiểm `closedStatuses` và tên field.

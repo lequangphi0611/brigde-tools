@@ -176,3 +176,4 @@ Không còn (các quyết định liên quan đã chốt ở GATE 1 của 005b: 
 |---|---|---|
 | 1 Phân tích | 2026-11-27 | Tách từ draft 005b ở GATE 1 của 005b: AC-28…31 cũ → AC-1…4, thêm AC-5 (gh chưa đăng nhập không chặn khởi động, trước là một dòng thiết kế), bảng kiểm Windows 7 bước. Không e2e |
 | GATE 1 | 2026-11-27 | User duyệt (cùng GATE 1 của 005b): `config.json` ở `<dataDir>`, poll 5 phút (1–60), `pnpm start`, kiểm máy thật bằng project cá nhân GHES (`ownerType: "user"`) đủ 7 bước. Code gộp PR #11 với 005a, 005b. Trạng thái approved |
+| Implement 1–5 | 2026-11-27 | AppConfig, startup/format, nhánh thật buildDeps(mode, RealWiring), main.ts + `pnpm start`, docs (diagnose.md, CLAUDE.md). Chờ bước 6 (kiểm máy thật, user) |

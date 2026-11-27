@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 GH Issue Translator: process Node chạy nền trên Windows, theo dõi GitHub Projects v2 tiếng Nhật, dịch issue/comment sang tiếng Việt bằng `claude -p` local, báo bằng toast Windows, UI đọc ở `localhost`. Vision, phạm vi và câu hỏi mở: `docs/product/vision.md`. Lộ trình MVP theo mốc và story: `docs/product/roadmap.md`. Giao tiếp với user bằng tiếng Việt.
 
-Trạng thái hiện tại: khung + harness + runner Claude CLI (`packages/core-translate/src/infrastructure/claude-cli/`, ADR-0003). Adapter `Translator` thật và `GhCliGateway` (005a) đã có; toast và poller **chưa có** — mốc M0 trong roadmap là spike các điểm rủi ro đó trên Windows trước khi viết tính năng phụ thuộc vào chúng.
+Trạng thái hiện tại: khung + harness + runner Claude CLI (`packages/core-translate/src/infrastructure/claude-cli/`, ADR-0003). Adapter `Translator` thật, `GhCliGateway` (005a), poller (`PollCycle`/`PollScheduler`, 005b) và nhánh adapter thật của `pnpm start` (005c) đã có; toast **chưa có** — mốc M0 trong roadmap là spike các điểm rủi ro đó trên Windows trước khi viết tính năng phụ thuộc vào chúng.
 
 ## Lệnh
 
@@ -23,7 +23,8 @@ pnpm tokens                         # sinh apps/app/web/src/styles/tokens.css t�
 pnpm diagnose                       # kiểm M0 trên máy Windows thật (GH_HOST, Projects v2, claude -p, --scheduler, --toast); không cần install
 pnpm -s translate-issue <file.json> [--config <path>] [--out <file>]  # dịch title+body của một issue (JSON xuất bằng gh) bằng claude -p thật, cache vào app.db; in dòng trạng thái cuối
 pnpm -s github-check --owner <org|user> --number <n> [--owner-type user] [--status-field <tên>] [--days <1-30>] [--max-details <1-200>] [--raw]  # cần GH_HOST; quét board Projects v2 + lấy chi tiết issue gần đây bằng `gh` thật, in một dòng số đếm (không ghi DB, không gọi Claude)
-pnpm dev                            # chạy app (hiện chỉ chạy được với APP_ADAPTERS=fake)
+pnpm start                          # chạy nhánh adapter thật: cần GH_HOST và <dataDir>/config.json (xem docs/spikes/diagnose.md, mục "Kiểm poller"); poll theo chu kỳ, in dòng [poll]
+pnpm dev                            # chạy app dạng watch; đặt APP_ADAPTERS=fake để dùng fake (không đặt thì giống pnpm start)
 ```
 
 ## Kiến trúc tổng
