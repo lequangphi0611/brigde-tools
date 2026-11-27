@@ -209,3 +209,30 @@ export function pickTimeProbe(nodes, k = 5) {
   const t = times[Math.min(k, times.length) - 1] - 1000;
   return isoSecond(new Date(t));
 }
+
+/** Giải nghĩa LastTaskResult của Task Scheduler (chỉ mã, không có dữ liệu máy). */
+export function describeTaskResult(code) {
+  const n = String(code ?? "").trim() === "" ? NaN : Number(code);
+  if (!Number.isFinite(n)) return "không đọc được";
+  const known = {
+    0: "đã chạy xong",
+    1: "process thoát mã 1 (có FAIL hoặc crash)",
+    0x41301: "vẫn đang chạy (quá hạn chờ)",
+    0x41303: "chưa chạy lần nào (task không được khởi động)",
+    0x41306: "bị dừng giữa chừng",
+    0x8007010b: "thư mục làm việc không hợp lệ",
+    0x80070002: "không tìm thấy file chạy (node.exe/script)",
+    0x80070005: "bị từ chối quyền (Access denied)",
+    0x80070569: "user không có quyền logon cho task (GPO)",
+  };
+  const hex = "0x" + (n >>> 0).toString(16).toUpperCase();
+  return `${hex}: ${known[n >>> 0] ?? known[n] ?? "mã lạ"}`;
+}
+
+/** Tổng thời gian chờ task con: --version (60s) + claude -p (timeoutSeconds) + khởi động/toast. */
+export function schedulerDeadlineMs(timeoutSeconds) {
+  const t = Number.isFinite(timeoutSeconds) && timeoutSeconds > 0 ? timeoutSeconds : 300;
+  return (60 + t + 120) * 1000;
+}
+
+export const SCHED_DONE = "done          INFO  hết lượt chạy";

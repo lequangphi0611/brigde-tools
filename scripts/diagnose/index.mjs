@@ -9,7 +9,7 @@
 //   node scripts/diagnose/index.mjs --owner <org> --number <n> [--owner-type user] [--scheduler] [--toast] [--raw]
 
 import { spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { release, tmpdir } from "node:os";
 import { dirname, extname, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
@@ -18,7 +18,7 @@ import { parseArgs } from "node:util";
 import {
   CLAUDE_SCHEMA, CLAUDE_SYSTEM_PROMPT, claudeFixedArgs, findForbiddenFlag, classifyClaudeFailure, classifyGhError, compareNodes,
   evaluateCounts, evaluateTranslation, hasProjectScope, isoDay, isoSecond, parseClaudeEnvelope, sampleStdin,
-  analyzeFilter, chooseClaude, countAfter, pickTimeProbe,
+  analyzeFilter, chooseClaude, countAfter, pickTimeProbe, describeTaskResult, schedulerDeadlineMs, SCHED_DONE,
 } from "./checks.mjs";
 
 const SCRIPT = fileURLToPath(import.meta.url);
@@ -50,6 +50,8 @@ function say(key, status, detail = "") {
   const l = `${key.padEnd(14)}${status.padEnd(6)}${detail}`.trimEnd();
   lines.push(l);
   console.log(l);
+  // Lượt chạy từ Task Scheduler: ghi từng dòng ngay → crash/quá hạn vẫn thấy đã tới bước nào.
+  if (opt["only-claude"] && opt.out) appendFileSync(opt.out, l + "\n", "utf8");
 }
 function raw(text) {
   if (opt.raw && text) console.log(`    [raw] ${String(text).trim().replace(/\n/g, "\n          ")}`);
@@ -375,6 +377,14 @@ async function checkClaude() {
 }
 
 // ---------- Task Scheduler (Windows) ----------
+function configTimeoutSeconds() {
+  try {
+    return existsSync(opt.config) ? JSON.parse(readFileSync(opt.config, "utf8")).timeoutSeconds : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function powershell(script, timeout = 60_000) {
   const b64 = Buffer.from(script, "utf16le").toString("base64");
   return runSync("powershell.exe", ["-NoProfile", "-NonInteractive", "-EncodedCommand", b64], timeout);
@@ -396,18 +406,29 @@ Start-ScheduledTask -TaskName ${psq(name)}`);
     raw(reg.err);
     return say("scheduler", "FAIL", "không tạo/chạy được task (GPO chặn?)");
   }
-  say("scheduler", "INFO", "đã tạo task tạm, đang chờ lượt chạy claude (tối đa ~6 phút)…");
-  const deadline = Date.now() + 360_000;
-  while (!existsSync(out) && Date.now() < deadline) await new Promise((r) => setTimeout(r, 2000));
+  const waitMs = schedulerDeadlineMs(configTimeoutSeconds());
+  say("scheduler", "INFO", `đã tạo task tạm, đang chờ lượt chạy claude (tối đa ~${Math.round(waitMs / 60_000)} phút)…`);
+  const deadline = Date.now() + waitMs;
+  const done = () => existsSync(out) && readFileSync(out, "utf8").includes(SCHED_DONE);
+  while (!done() && Date.now() < deadline) await new Promise((r) => setTimeout(r, 2000));
   await new Promise((r) => setTimeout(r, 500));
-  const info = powershell(`(Get-ScheduledTaskInfo -TaskName ${psq(name)}).LastTaskResult; Unregister-ScheduledTask -TaskName ${psq(name)} -Confirm:$false`);
-  if (!existsSync(out)) return say("scheduler", "FAIL", `task không ghi kết quả (LastTaskResult ${firstLine(info.out) || "?"})`);
-  for (const l of readFileSync(out, "utf8").split(/\r?\n/).filter(Boolean)) {
+  const finished = done();
+  // Quá hạn: dừng task để không để process con chạy ngầm, rồi mới xoá.
+  const info = powershell(`$i = Get-ScheduledTaskInfo -TaskName ${psq(name)}; $i.LastTaskResult
+${finished ? "" : `Stop-ScheduledTask -TaskName ${psq(name)} -ErrorAction SilentlyContinue`}
+Unregister-ScheduledTask -TaskName ${psq(name)} -Confirm:$false`);
+  const result = describeTaskResult(firstLine(info.out));
+  const got = existsSync(out) ? readFileSync(out, "utf8").split(/\r?\n/).filter((l) => l && l !== SCHED_DONE) : [];
+  for (const l of got) {
     lines.push(`[sched] ${l}`);
     console.log(`[sched] ${l}`);
     if (/^\S+\s+FAIL/.test(l)) failures++;
   }
   rmSync(out, { force: true });
+  if (!finished) {
+    const last = got.length ? `dừng sau dòng "${got.at(-1).split(/\s+/)[0]}"` : "không ghi dòng nào";
+    return say("scheduler", "FAIL", `task không chạy xong trong ${Math.round(waitMs / 1000)}s, ${last} (LastTaskResult ${result})`);
+  }
   if (opt.toast && process.stdin.isTTY) {
     const rl = createInterface({ input: process.stdin, output: process.stdout });
     const seen = (await rl.question('  Có thấy toast "[M0] Toast từ Task Scheduler" không? (y/n) ')).trim().toLowerCase() === "y";
@@ -467,8 +488,16 @@ async function main() {
     if (opt.toast) await checkToast();
     console.log(`\n${failures === 0 ? "Không có FAIL." : `${failures} FAIL.`} Các dòng trên không chứa hostname/owner/nội dung → gõ lại được.`);
   }
-  if (opt.out) writeFileSync(opt.out, lines.join("\n") + "\n", "utf8");
+  if (opt.out && !opt["only-claude"]) writeFileSync(opt.out, lines.join("\n") + "\n", "utf8");
   process.exitCode = failures === 0 ? 0 : 1;
 }
 
-main();
+main()
+  .catch((e) => {
+    say("crash", "FAIL", e?.code ?? e?.name ?? "lỗi lạ"); // không in message: có thể chứa đường dẫn
+    raw(e?.stack);
+    process.exitCode = 1;
+  })
+  .finally(() => {
+    if (opt["only-claude"] && opt.out) appendFileSync(opt.out, SCHED_DONE + "\n", "utf8");
+  });

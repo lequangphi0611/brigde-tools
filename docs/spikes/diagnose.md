@@ -34,6 +34,8 @@ node scripts/diagnose/index.mjs --owner <org> --number <n> --scheduler --toast  
 | `claude -p FAIL NOT_FOUND` | `command` không spawn được (shim npm không đuôi, alias PowerShell). Dùng `--write-config` hoặc sửa config, xem README |
 | `claude path FAIL` | `command` đang trỏ tới `.cmd`/`.ps1`. Cần trỏ tới `claude.exe`, hoặc `node` + `cli.js` |
 | `claude -p FAIL UNKNOWN_FLAG --x` | Bản Claude CLI đang cài không có cờ đó, ADR-0003 cần chỉnh |
+| `claude cfg FAIL … chứa cờ --x` | Config có cờ mà app tự đặt hoặc cấm (cấp tool, bỏ quyền…). Xoá cờ đó khỏi `args` |
+| `scheduler FAIL task không chạy xong …` | Task con không xong trong hạn chờ (60s + `timeoutSeconds` + 120s). Các dòng `[sched]` phía trên cho biết nó dừng ở bước nào. `0x41301` = vẫn đang chạy (chậm), `0x41303` = chưa từng chạy (GPO/quyền logon), `0x80070002` = không thấy node/script, `1` = crash hoặc có FAIL |
 | `[sched] …` | Kết quả của cùng phép thử khi chạy qua Task Scheduler (khác PATH, khác môi trường) |
 | `node:sqlite FAIL` | Không dùng được SQLite có sẵn trong Node → xem lại ADR-0004 (better-sqlite3) |
 | `sched toast FAIL` | Toast gửi từ process nền không hiện → xem lại ADR-0005 |

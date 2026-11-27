@@ -21,6 +21,16 @@ describe("diagnose checks", () => {
     expect(c.findForbiddenFlag(["--allowedTools=Bash"])).toBe("--allowedTools");
   });
 
+  it("giải nghĩa LastTaskResult và tính hạn chờ scheduler", () => {
+    expect(c.describeTaskResult("267009")).toBe("0x41301: vẫn đang chạy (quá hạn chờ)");
+    expect(c.describeTaskResult(-2147024894)).toBe("0x80070002: không tìm thấy file chạy (node.exe/script)");
+    expect(c.describeTaskResult("2147942402")).toBe("0x80070002: không tìm thấy file chạy (node.exe/script)");
+    expect(c.describeTaskResult("")).toBe("không đọc được");
+    expect(c.describeTaskResult("abc")).toBe("không đọc được");
+    expect(c.schedulerDeadlineMs(300)).toBe(480_000);
+    expect(c.schedulerDeadlineMs(undefined)).toBe(480_000);
+  });
+
   it("đọc envelope: object, mảng event, dòng JSON sau log", () => {
     const env = { type: "result", is_error: false, structured_output: { translation: "xin chào" } };
     expect(c.parseClaudeEnvelope(JSON.stringify(env))).toEqual({ ok: true, translation: "xin chào" });
