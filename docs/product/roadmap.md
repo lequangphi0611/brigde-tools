@@ -67,12 +67,13 @@ Lần đầu tiên dùng thật được. Project cấu hình cứng trong file 
 |---|---|---|---|---|---|
 | 004 ✅ | Lưu trữ SQLite + migration + bảng `setting` | hạ tầng | – | S | ADR-0004 |
 | 005a ✅ | (Tách từ 005 ở GATE 1, 2026-11-27) Adapter GitHub: port `GitHubGateway` hai pha (quét toàn bộ board theo `Issue.updatedAt` + lấy chi tiết kèm comment theo lô), `GhCliGateway` + fake `gh` mức process, contract test với `FakeGitHub`; 4 dòng đo mới trong `diagnose`; lệnh `pnpm -s github-check` chỉ in mã và số đếm. ADR-0010 | Tracking | – | M | S0.2 |
-| 005b | (Tách từ 005) Poller một project: phát hiện issue mới và comment mới theo `Issue.updatedAt` (so mốc từng issue); lần đầu chỉ lấy mốc thời gian; issue bị sửa thì phát `ContentChanged(edited)` để dịch lại nhưng không báo. **Quy tắc close (chốt 2026-11-27):** issue đã đóng = state CLOSED hoặc Status của item thuộc danh sách close cấu hình theo project (mặc định field `Status`, danh sách rỗng = chỉ dùng state); mọi chu kỳ, issue đang đóng không dịch, không báo, kể cả comment mới; mở lại thì theo dõi bình thường. Lắp storage thật (`openAppStorage` + `dataDir`), `buildRealTranslator`, `GhCliGateway` vào nhánh adapter thật; dòng lỗi `StorageError` của `main.ts` có đường dẫn DB (dòng riêng), tách hàm format có unit test (dời từ review 004). Nháp ở `docs/features/005a-github-gateway/spec.md` mục "Phần sau: 005b" | Tracking | – | M | 005a, 004 |
+| 005b | (Tách từ 005) Poller một project, **logic chạy trọn trong container**: phát hiện issue mới và comment mới theo `Issue.updatedAt` (so mốc từng issue); lần đầu chỉ lấy mốc thời gian; issue bị sửa thì phát `ContentChanged(edited)` để dịch lại nhưng không báo. **Quy tắc close (chốt 2026-11-27):** issue đã đóng = state CLOSED hoặc Status của item thuộc danh sách close cấu hình theo project (mặc định field `Status`, danh sách rỗng = chỉ dùng state); mọi chu kỳ, issue đang đóng không dịch, không báo, kể cả comment mới; mở lại thì theo dõi bình thường. Gồm domain Tracking, `PollCycle`, migration + repository, event bus đồng bộ trong transaction (ADR-0011), `PollScheduler`, dòng `[poll]`, `POST /__test__/poll` cho chế độ fake. Spec: `docs/features/005b-project-poller/spec.md` (approved GATE 1, 2026-11-27) | Tracking | – | M | 005a, 004 |
+| 005c | (Tách từ 005b ở GATE 1, 2026-11-27) Lắp nhánh adapter thật: đọc `<dataDir>/config.json` (project, `pollIntervalMin`, `claudeCliConfig`), `GH_HOST` bắt buộc, `openAppStorage` + `dataDir`, `GhCliGateway`, `buildRealTranslator`; dòng lỗi `StorageError` có đường dẫn DB ở dòng riêng, hàm format có unit test (dời từ review 004); `pnpm start`; bảng kiểm 7 bước trên Windows thật với project cá nhân GHES. Spec: `docs/features/005c-real-adapter-wiring/spec.md` (approved) | hạ tầng | – | S | 005b, 003b |
 | 006 | Hàng đợi dịch bền (bảng `job`): tối đa 2 job song song (≈70 lần gọi/giờ), gộp các comment mới của cùng issue vào một job, retry có giới hạn, ưu tiên mục liên quan tới tôi, job dở được chạy lại sau khi restart | Translation | – | M | 003, 004 |
 | 006b | (User chốt 2026-11-27) Trang hàng đợi dịch: xem issue đang dịch / đang chờ / lỗi; huỷ job đang chờ, dừng job đang dịch (kill process `claude -p`; runner cần hỗ trợ huỷ — Cần kiểm chứng kill cây process trên Windows; **không bắt buộc**: nếu khó thì job đang dịch được đánh dấu huỷ, chạy nốt, kết quả không hiển thị và không báo nhưng vẫn lưu vào cache dịch để theo dõi lại thì có ngay — user chốt 2026-11-27), tạm dừng / bật lại cả hàng đợi. Huỷ job = unlisten luôn issue đó cho tới khi user bấm theo dõi lại. **Xung đột với 019:** unlisten từng issue vốn thuộc 019 (M5) → 006b kéo lên sớm phần tối thiểu (cờ unlisten trên issue, poller bỏ qua issue đó, nút theo dõi lại); 019 sau đó mở rộng (listen riêng khi project tắt báo comment, theo dõi thủ công issue đã đóng) | Translation (+ Tracking cho unlisten) | có | M | 006, 008 |
-| 007 | Toast khi bản dịch đã sẵn (issue mới), title tiếng Việt, bấm mở đúng issue | Notification | – | S | 006, ADR-0005 |
+| 007 | Toast khi bản dịch đã sẵn (issue mới), title tiếng Việt, bấm mở đúng issue | Notification | – | S | 006, 005c, ADR-0005 |
 | 008 | Trang issue: tiếng Việt và tiếng Nhật song song, có link sang GitHub, trạng thái "đang dịch" và "dịch lỗi" | Tracking | có | M | 006 |
-| 009 | Trang tình trạng tối thiểu: gh đã đăng nhập chưa, Claude CLI đã cấu hình chưa, lần poll cuối, số job lỗi; ghi log ra file local | vận hành | có | S | 005b, 006 |
+| 009 | Trang tình trạng tối thiểu: gh đã đăng nhập chưa, Claude CLI đã cấu hình chưa, lần poll cuối, số job lỗi; ghi log ra file local | vận hành | có | S | 005c, 006 |
 
 **Xong khi (cổng dùng thật):** chạy trên máy thật ít nhất vài ngày với một project. Ghi lại lỗi gặp phải thành story mới hoặc sửa thứ tự các mốc sau.
 
@@ -92,7 +93,7 @@ Lần đầu tiên dùng thật được. Project cấu hình cứng trong file 
 
 | # | Story | Context | UI | Cỡ | Phụ thuộc |
 |---|---|---|---|---|---|
-| 013 | Thêm project bằng URL (`orgs/…` hoặc `users/…`): kiểm quyền truy cập, lấy tên project và danh sách repo | Tracking | có | M | 005b |
+| 013 | Thêm project bằng URL (`orgs/…` hoặc `users/…`): kiểm quyền truy cập, lấy tên project và danh sách repo (thay phần `project` của `config.json` từ 005c) | Tracking | có | M | 005b, 005c |
 | 014 | Quy tắc thông báo theo project (issue mới / assign hoặc mention tôi / comment mới) và chu kỳ poll; phát hiện assign/mention | Notification | có | M | 007, 013 |
 | 015 | Quản lý glossary: chung và riêng từng project | Translation | có | S | 002 |
 | 016 | Xoá project (dữ liệu và job liên quan) | Tracking | có | S | 013 |
@@ -113,7 +114,7 @@ Lần đầu tiên dùng thật được. Project cấu hình cứng trong file 
 
 | # | Story | Context | UI | Cỡ | Phụ thuộc |
 |---|---|---|---|---|---|
-| 020 | Cài / gỡ chạy nền khi đăng nhập (Task Scheduler), chỉ một instance, cổng cố định | vận hành | – | S | M2 |
+| 020 | Cài / gỡ chạy nền khi đăng nhập (Task Scheduler), chỉ một instance, cổng cố định | vận hành | – | S | M2 (cần 005c: `pnpm start`) |
 | 021 | Hướng dẫn cài đặt lần đầu (gh, Claude CLI, file cấu hình) và trang tình trạng đầy đủ | vận hành | có | S | 009 |
 
 **Nghiệm thu MVP (trên máy thật, có checklist ghi lại):**

@@ -24,7 +24,7 @@
 ## Quan hệ & quy tắc
 
 - **Anti-Corruption Layer** cho mọi hệ ngoài: GitHub (`GitHubGateway`), Claude (`Translator`), Windows (`Notifier`). Domain không thấy JSON của GitHub hay stdout của CLI.
-- Context giao tiếp qua **domain event** trong process (in-memory bus), không gọi chéo repository của nhau.
+- Context giao tiếp qua **domain event** trong process (in-memory bus), không gọi chéo repository của nhau. Bus đồng bộ, handler chạy trong transaction SQLite của bên phát, không outbox (ADR-0011, Proposed, story 005b); kiểu event ở `apps/app/src/shared/events/`, chỉ chứa ID.
 - `core-translate` là upstream; `app` là downstream (conformist với API `translate()`).
 
 ## Lưu trữ (hạ tầng dùng chung, không phải context)

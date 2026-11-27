@@ -8,13 +8,24 @@ Khi story đưa thêm khái niệm, `analyst` thêm vào đây TRƯỚC khi impl
 | Dự án theo dõi | `TrackedProject` | Tracking | Một GitHub Project v2 người dùng đã thêm vào tool |
 | Issue | `Issue` | Tracking | Issue GitHub nằm trên board của một TrackedProject. Định danh = GitHub node id |
 | Nội dung | `Content` | Tracking | Một đoạn cần dịch: title, body hoặc một comment (`kind`) |
-| Mốc đã thấy | `lastSeen` | Tracking | `Issue.updatedAt` lớn nhất đã xử lý. Luôn là của Issue, KHÔNG phải của project item |
+| Mốc đã thấy | `lastSeen` | Tracking | `Issue.updatedAt` lớn nhất đã xử lý. Luôn là của Issue, KHÔNG phải của project item ; theo project = max `Issue.ghUpdatedAt` đã lưu (suy ra, không lưu cột riêng — 005b). Phát hiện thay đổi so mốc **từng issue**, không so với `lastSeen` |
 | Chu kỳ poll | `PollCycle` | Tracking | Một lần quét một project tìm thay đổi |
 | Lần quét board | `ProjectScan` | Tracking | Kết quả `GitHubGateway.scanProject`: mọi Issue trên board (`ProjectIssueStamp`), số item bị bỏ qua (PR, draft, không có quyền), số trang (story 005a) |
 | Mốc của issue trên board | `ProjectIssueStamp` | Tracking | `{ nodeId, updatedAt, state, status }`: `updatedAt` = `Issue.updatedAt` (không phải của project item), `state` = `OPEN`/`CLOSED`, `status` = giá trị field Status của item hoặc `null`. Adapter chỉ trả dữ liệu, không áp quy tắc close |
-| Issue đã đóng | `closed` (quy tắc của 005b) | Tracking | Issue có `state = CLOSED` **hoặc** giá trị Status của item thuộc danh sách close của project. Mọi chu kỳ: đang đóng thì không dịch, không báo (kể cả comment mới); mở lại thì theo dõi bình thường; người dùng vẫn listen riêng (019) / Dịch ngay (011) được |
+| Issue đã đóng | `closed` (`isIssueClosed`) | Tracking | Issue có `state = CLOSED` **hoặc** giá trị Status của item thuộc danh sách close của project. Mọi chu kỳ: đang đóng thì không dịch, không báo (kể cả comment mới); mở lại thì theo dõi bình thường; người dùng vẫn listen riêng (019) / Dịch ngay (011) được |
 | Field Status | `statusField` | Tracking | Tên field single select của Projects v2 dùng cho quy tắc close, cấu hình theo project (mặc định `Status`). Giá trị đọc được: `ProjectItemStatus { name, optionId }` |
-| Danh sách close | `closedStatuses` | Tracking | Các giá trị Status coi là đã đóng, theo project; rỗng = chỉ dùng `state` (tên code chốt ở 005b) |
+| Danh sách close | `closedStatuses` | Tracking | Các giá trị Status coi là đã đóng, theo project; rỗng = chỉ dùng `state` (và không đọc field Status khi quét). So tên option sau NFKC + trim + viết thường (005b) |
+| Quy tắc close | `CloseRule` | Tracking | `{ statusField, closedStatuses }` của một project; `isIssueClosed(stamp, rule, scan.statusField)` áp quy tắc (005b) |
+| Lấy mốc | `baseline` / `baselinedAt` | Tracking | Chu kỳ đầu tiên của một project: chỉ lưu `Issue.updatedAt` + trạng thái đóng của mọi issue, không lấy chi tiết, không phát event. `TrackedProject.baselinedAt = null` = chưa lấy mốc |
+| Issue chỉ có mốc | `contentsLoaded = false` | Tracking | Issue đã lưu mốc nhưng chưa có `Content` (từ lần lấy mốc, hoặc vào board khi đã đóng). Lần đầu lấy chi tiết: title/body/comment cũ lưu im lặng, chỉ comment có `createdAt` > mốc là mới |
+| Quyết định theo dõi | `trackingDecision` | Tracking | Hàm domain duy nhất quyết định một issue trong một chu kỳ: `baseline` / `store_closed` / `skip_closed` / `discover` / `refresh` / `unchanged`. Unlisten issue (006b) và listen riêng (019) mở rộng tại đây |
+| Mã nội dung | `ContentId` | Tracking | `title:<issueNodeId>`, `body:<issueNodeId>`, `comment:<commentNodeId>`; ổn định qua chu kỳ và restart |
+| Lý do thay đổi | `ContentChangeReason` | Tracking | `new_issue` / `new_comment` / `edited`, trong `ContentChanged`. Bên báo (007/014) không nghe `edited` |
+| Báo cáo chu kỳ | `PollReport` | Tracking | Kết quả `PollCycle`: `BASELINE` / `OK` / `PARTIAL` / `FAIL` + số đếm; in thành dòng `[poll] …` chỉ có mã và số (005b) |
+| Vòng lặp poll | `PollScheduler` | Tracking | Chạy `PollCycle` ngay khi khởi động rồi mỗi `pollIntervalMin` phút sau khi chu kỳ trước xong; không chạy chồng; lỗi không dừng vòng lặp |
+| Cấu hình app | `AppConfig` | Shared (hạ tầng) | File `<dataDir>/config.json`: `project { owner, ownerType, number, statusField, closedStatuses }`, `pollIntervalMin`, `claudeCliConfig`. Đọc khi khởi động nhánh adapter thật (005c). Tạm cho tới khi 013 có UI |
+| Phát event | `DomainEventPublisher` | Shared (port) | `publish(events)` đồng bộ, gọi trong `UnitOfWork` của bên phát; handler chạy trong cùng transaction (ADR-0011). Adapter `InProcessEventBus` |
+| Đơn vị công việc | `UnitOfWork` | Shared (port) | `run(fn)` đồng bộ trong một transaction SQLite; Tracking dùng một `UnitOfWork` cho mỗi issue mỗi chu kỳ (ADR-0011) |
 | Chi tiết issue | `IssueDetails` | Tracking | Kết quả `GitHubGateway.fetchIssueDetails`: `GitHubIssueSnapshot` (kèm mọi comment) + `missing` (id không còn đọc được) |
 | Lỗi GitHub | `GitHubFailure` | Tracking | Lỗi của port `GitHubGateway`: `reason` = `gh_not_found` / `not_authenticated` / `scope_missing` / `project_not_found` / `projects_v2_unsupported` / `network` / `timeout` / `process_failed` / `bad_output`; không chứa owner, hostname, id hay nội dung |
 | Adapter gh | `GhCliGateway` | Tracking | Adapter thật của `GitHubGateway`: gọi `gh api graphql` qua `runGhCli` (không shell, query + biến qua stdin), ADR-0010 |
