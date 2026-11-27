@@ -24,8 +24,11 @@ Khi story đưa thêm khái niệm, `analyst` thêm vào đây TRƯỚC khi impl
 | Phần giữ nguyên | `ProtectedSpan` | Translation | Đoạn không được dịch: code block, inline code, URL, `@mention`, email, comment HTML, thẻ phân cách giả |
 | Chỗ giữ | `placeholder` | Translation | Ký hiệu `⟦N⟧` thay phần giữ nguyên khi gửi cho engine, khôi phục nguyên văn sau khi nhận |
 | Lỗi dịch | `TranslationFailure` | Translation | Lỗi của port: `reason` = `not_configured` / `input_too_large` / `timeout` / `process_failed` / `bad_output`; không chứa nội dung |
-| Thuật ngữ | `GlossaryTerm` | Translation | Cặp ja↔vi; `projectId = null` là chung. Project thắng khi trùng |
-| Phiên bản glossary | `glossaryVersion` | Translation | Đổi glossary → bản dịch cũ có thể dịch lại |
+| Thuật ngữ | `GlossaryTerm` | Translation | Cặp ja↔vi (+ `note`). Trong `core-translate` là `GlossaryTermInput { ja, vi, note? }`; tầng chung/project là hai danh sách riêng. `projectId` (`null` = chung) chỉ có ở lưu trữ phía app (015). Project thắng khi trùng khoá |
+| Khoá thuật ngữ | `termKey` | Translation | `ja` sau NFKC, gộp khoảng trắng, trim, viết thường. Hai thuật ngữ trùng ⇔ cùng khoá (ADR-0007) |
+| Glossary đã gộp | `Glossary` | Translation | Kết quả `mergeGlossary(common, project)`: danh sách `{ ja, vi }` đã chuẩn hoá, khoá duy nhất, sắp theo khoá. Là `TranslationContext.glossary` |
+| Thuật ngữ liên quan | `relevantTerms` | Translation | Thuật ngữ có phía nguồn xuất hiện (sau chuẩn hoá) trong text đã che của các đoạn; chỉ những thuật ngữ này vào prompt |
+| Phiên bản glossary | `glossaryVersion` | Translation | `"g1-"` + 16 hex đầu sha256 của danh sách thuật ngữ đã chuẩn hoá; rỗng = `GLOSSARY_VERSION_EMPTY`. Đổi glossary → bản dịch cũ có thể dịch lại. Tính trên cả glossary hay trên thuật ngữ liên quan của từng đoạn: story 003 chốt |
 | Job dịch | `TranslationJob` | Translation | Mục trong hàng đợi: priority, status, attempts |
 | Dịch ngay | `translateNow` | Translation | Người dùng yêu cầu dịch issue chưa có bản dịch |
 | Dịch bù | `backfill` | Tracking→Translation | Dịch phần bỏ lỡ khi listen lại |
