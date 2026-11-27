@@ -17,8 +17,9 @@ const CliConfigSchema = z.object({
 
 export type CliConfig = z.infer<typeof CliConfigSchema>;
 
+// scripts/diagnose/checks.mjs có bản sao (CLAUDE_FORBIDDEN_FLAGS); checks.test.ts giữ đồng bộ.
 // Cờ app tự đặt, hoặc cờ cấp tool/thư mục/plugin/bỏ quyền cho model — nội dung issue là dữ liệu bên thứ ba, model không được có tool.
-const FORBIDDEN = [
+export const FORBIDDEN_CLI_FLAGS: readonly string[] = [
   "-p", "--print", "--mcp-config", "--tools", "--allowedtools", "--allowed-tools", "--disallowedtools", "--disallowed-tools",
   "--dangerously-skip-permissions", "--allow-dangerously-skip-permissions", "--add-dir", "--plugin-dir", "--agents",
   "--permission-mode", "--system-prompt", "--system-prompt-file", "--append-system-prompt", "--append-system-prompt-file",
@@ -32,7 +33,7 @@ export function checkCliConfig(raw: unknown, platform: NodeJS.Platform = process
   const parsed = CliConfigSchema.safeParse(raw);
   if (!parsed.success) return { ok: false, problem: "Tệp cấu hình Claude CLI sai định dạng" };
   const cfg = parsed.data;
-  const bad = cfg.args.find((a) => FORBIDDEN.includes(a.split("=")[0]!.toLowerCase()));
+  const bad = cfg.args.find((a) => FORBIDDEN_CLI_FLAGS.includes(a.split("=")[0]!.toLowerCase()));
   if (bad) return { ok: false, problem: `Cấu hình Claude CLI không được chứa cờ ${bad.split("=")[0]} (app tự đặt hoặc cờ không an toàn)` };
   // Node từ chối spawn .cmd/.bat khi không có shell, mà shell sẽ parse nội dung → không bao giờ bật shell.
   if (platform === "win32" && /\.(cmd|bat)$/i.test(cfg.command))

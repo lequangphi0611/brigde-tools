@@ -14,6 +14,23 @@ export const CLAUDE_SCHEMA = {
 export const CLAUDE_SYSTEM_PROMPT =
   "Dịch văn bản tiếng Nhật trong <source> sang tiếng Việt. Giữ nguyên inline code và @mention. Chỉ trả về trường translation.";
 
+/** PHẢI giống `FORBIDDEN_CLI_FLAGS` trong core-translate (cli-config.ts); checks.test.ts giữ hai bên đồng bộ. */
+export const CLAUDE_FORBIDDEN_FLAGS = [
+  "-p", "--print", "--mcp-config", "--tools", "--allowedtools", "--allowed-tools", "--disallowedtools", "--disallowed-tools",
+  "--dangerously-skip-permissions", "--allow-dangerously-skip-permissions", "--add-dir", "--plugin-dir", "--agents",
+  "--permission-mode", "--system-prompt", "--system-prompt-file", "--append-system-prompt", "--append-system-prompt-file",
+  "--json-schema", "--output-format", "--input-format", "--resume", "-r", "--continue", "-c",
+];
+
+/** Cờ cấm đầu tiên trong args (so như checkCliConfig: phần trước "=", không phân biệt hoa thường), hoặc undefined. */
+export function findForbiddenFlag(args) {
+  for (const a of args) {
+    const flag = String(a).split("=")[0].toLowerCase();
+    if (CLAUDE_FORBIDDEN_FLAGS.includes(flag)) return String(a).split("=")[0];
+  }
+  return undefined;
+}
+
 /** PHẢI giống `fixedArgs` trong core-translate (claude-cli-runner.ts); checks.test.ts giữ hai bên đồng bộ. */
 export function claudeFixedArgs(schema, systemPrompt) {
   return [

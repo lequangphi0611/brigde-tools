@@ -16,7 +16,7 @@ import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import {
-  CLAUDE_SCHEMA, CLAUDE_SYSTEM_PROMPT, claudeFixedArgs, classifyClaudeFailure, classifyGhError, compareNodes,
+  CLAUDE_SCHEMA, CLAUDE_SYSTEM_PROMPT, claudeFixedArgs, findForbiddenFlag, classifyClaudeFailure, classifyGhError, compareNodes,
   evaluateCounts, evaluateTranslation, hasProjectScope, isoDay, isoSecond, parseClaudeEnvelope, sampleStdin,
   analyzeFilter, chooseClaude, countAfter, pickTimeProbe,
 } from "./checks.mjs";
@@ -270,10 +270,15 @@ function resolveClaude() {
   if (existsSync(opt.config)) {
     try {
       const c = JSON.parse(readFileSync(opt.config, "utf8"));
+      const bad = findForbiddenFlag(Array.isArray(c.args) ? c.args : []);
+      if (bad) {
+        say("claude cfg", "FAIL", `config/claude-cli.local.json chứa cờ ${bad} → app sẽ từ chối (app tự đặt hoặc cờ không an toàn)`);
+        return null;
+      }
       return { command: c.command, args: c.args ?? [], env: c.env ?? {}, source: "config", timeoutSeconds: c.timeoutSeconds ?? 300 };
     } catch {
       say("claude cfg", "FAIL", "config/claude-cli.local.json không phải JSON hợp lệ");
-      return undefined;
+      return null;
     }
   }
   const found = runSync(WIN ? "where.exe" : "which", ["claude"]);
@@ -335,6 +340,7 @@ function runClaude(cfg) {
 
 async function checkClaude() {
   const cfg = resolveClaude();
+  if (cfg === null) return; // đã báo lỗi cụ thể
   if (!cfg) {
     say("claude", "FAIL", "không tìm thấy: tạo config/claude-cli.local.json hoặc truyền --claude <đường dẫn tuyệt đối>");
     return;

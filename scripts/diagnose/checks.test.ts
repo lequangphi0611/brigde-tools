@@ -1,11 +1,24 @@
 import { describe, expect, it } from "vitest";
 import { fixedArgs } from "../../packages/core-translate/src/infrastructure/claude-cli/claude-cli-runner.ts";
+import { checkCliConfig, FORBIDDEN_CLI_FLAGS } from "../../packages/core-translate/src/infrastructure/claude-cli/cli-config.ts";
 // @ts-expect-error — module .mjs không có khai báo kiểu
 import * as c from "./checks.mjs";
 
 describe("diagnose checks", () => {
   it("dùng đúng cờ của runner thật (giữ đồng bộ với ADR-0003)", () => {
     expect(c.claudeFixedArgs(c.CLAUDE_SCHEMA, c.CLAUDE_SYSTEM_PROMPT)).toEqual(fixedArgs(c.CLAUDE_SCHEMA, c.CLAUDE_SYSTEM_PROMPT));
+  });
+
+  it("dùng đúng danh sách cờ cấm của app (giữ đồng bộ với cli-config.ts)", () => {
+    expect([...c.CLAUDE_FORBIDDEN_FLAGS].sort()).toEqual([...FORBIDDEN_CLI_FLAGS].sort());
+  });
+
+  it("findForbiddenFlag khớp checkCliConfig", () => {
+    const cases: string[][] = [["--model", "sonnet"], ["--Append-System-Prompt", "x"], ["--allowedTools=Bash"], ["-c"], ["--settings", "s.json"]];
+    for (const args of cases) {
+      expect(c.findForbiddenFlag(args) === undefined).toBe(checkCliConfig({ command: "claude", args }, "linux").ok);
+    }
+    expect(c.findForbiddenFlag(["--allowedTools=Bash"])).toBe("--allowedTools");
   });
 
   it("đọc envelope: object, mảng event, dòng JSON sau log", () => {
