@@ -243,9 +243,16 @@ function scanInline(text: string, region: Range): Range[] {
   return out;
 }
 
+function isBlankLineAfter(text: string, from: number, end: number): boolean {
+  let k = from;
+  while (k < end && (text[k] === " " || text[k] === "\t" || text[k] === "\r")) k++;
+  return k < end && text[k] === "\n";
+}
+
 function findBacktickRun(text: string, from: number, end: number, n: number): number {
   let j = from;
   while (j < end) {
+    if (text[j] === "\n" && isBlankLineAfter(text, j + 1, end)) return -1; // code span không vượt dòng trống
     if (text[j] !== "`") {
       j++;
       continue;

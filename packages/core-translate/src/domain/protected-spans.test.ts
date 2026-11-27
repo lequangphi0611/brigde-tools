@@ -207,3 +207,15 @@ describe("thẻ giả: gạch chéo toàn chiều rộng và ký tự zero-width
     expect(restore(p.masked, p.spans)).toEqual({ ok: true, text });
   });
 });
+
+describe("inline code không vượt dòng trống", () => {
+  it.each(["\n\n", "\r\n\r\n", "\n \t\n"])("backtick lẻ không nuốt các đoạn sau (%j)", (sep) => {
+    const text = `段落1で\`を使う${sep}段落2の本文${sep}段落3で\`閉じる`;
+    const p = protect(text);
+    expect(p.spans).toEqual([]);
+  });
+
+  it("xuống dòng đơn vẫn là một code span", () => {
+    expect(protect("`a\nb`").spans).toEqual(["`a\nb`"]);
+  });
+});
