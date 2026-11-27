@@ -31,6 +31,11 @@ node scripts/diagnose/index.mjs --owner <org> --number <n> --scheduler --toast  
 | `filter miss FAIL` | Có issue cập nhật (comment…) mà `item.updatedAt` không đổi nên filter bỏ sót → không dùng filter `updated:` làm nguồn chính; phải so `Issue.updatedAt` phía client |
 | `filter basis` | Filter dựa trên updatedAt của item hay của Issue. App theo dõi `Issue.updatedAt`: nếu filter dựa trên item thì chỉ dùng nó để thu hẹp, vẫn phải so lại `Issue.updatedAt` |
 | `updated time` | Server có hiểu giờ/phút không. Không hiểu thì chỉ lọc được ở mức ngày |
+| `item scan` | `FAIL`: không quét được toàn bộ item (mã lỗi). `OK`: `pages`, `items`, `issues`, `pr`, `draft`, `noaccess`, `ms` = chi phí **một chu kỳ poll** của 005b (số lần gọi `gh` = `pages`) → chọn chu kỳ poll mặc định |
+| `gql stdin` | `FAIL <mã>`: `gh api graphql --input -` (JSON `{query, variables}` qua stdin) không chạy → adapter dùng `-f query=… -F …` (đã chạy được ở dòng `projectsV2`), id đi inline. `OK ms=…` → adapter dùng stdin |
+| `comments WARN … newerComment=N` | N > 0: comment mới KHÔNG làm `Issue.updatedAt` đổi → thiết kế 005b (phát hiện comment mới) sai, **báo lại trước khi làm tiếp** |
+| `comments` | `issues` (số Issue lấy được), `withComments`, `maxComments`, `over100` (số issue hơn 100 comment → phải phân trang comment; 0 = ít cần), `newerComment` (phải 0), `editedComment` (comment cuối được sửa sau `Issue.updatedAt`; chấp nhận được), `batches`, `batchMs` (trung bình mỗi lô 25 id), `batchMsMax` → chọn `DETAIL_BATCH` |
+| `gql partial` | `nodes(ids:[thật, giả])`: `exit=<mã gh> stdoutJson=yes\|no data=<số node không null> errors=yes\|no`. `exit=1 stdoutJson=yes data=1` → dùng `data` và coi `null` là id mất (giả định hiện tại). `stdoutJson=no` → `gh` bỏ stdout khi có lỗi, adapter phải chia nhỏ lô để cô lập id hỏng. `exit=0` → server không coi id hỏng là lỗi |
 | `claude -p FAIL NOT_FOUND` | `command` không spawn được (shim npm không đuôi, alias PowerShell). Dùng `--write-config` hoặc sửa config, xem README |
 | `claude path FAIL` | `command` đang trỏ tới `.cmd`/`.ps1`. Cần trỏ tới `claude.exe`, hoặc `node` + `cli.js` |
 | `claude -p FAIL UNKNOWN_FLAG --x` | Bản Claude CLI đang cài không có cờ đó, ADR-0003 cần chỉnh |
@@ -43,6 +48,35 @@ node scripts/diagnose/index.mjs --owner <org> --number <n> --scheduler --toast  
 | `node:sqlite FAIL` | Không dùng được SQLite có sẵn trong Node → xem lại ADR-0004 (better-sqlite3) |
 | `sched toast FAIL` | Toast gửi từ process nền không hiện → xem lại ADR-0005 |
 | `toast click FAIL` | Cần cách toast khác, đưa vào ADR-0005 |
+
+### Bốn dòng đo cho adapter GitHub (005a, bước 1)
+
+Chạy khi có `--owner` và `--number` (cần `projectsV2 OK`), sau các dòng `filter …`/`updated time`. Chỉ chạy lệnh đọc, không ghi gì lên GitHub. Dòng `gql partial` cố ý gửi một id không tồn tại (id thật đổi ký tự cuối); lỗi đó là phép thử, không phải sự cố.
+
+```powershell
+$env:GH_HOST = "<host GHES>"
+node scripts/diagnose/index.mjs --owner <org> --number <n> --skip-claude
+```
+
+Mẫu output (số liệu minh hoạ):
+
+```
+item scan        OK    pages=3 items=286 issues=278 pr=5 draft=3 noaccess=0 ms=4100
+gql stdin        OK    ms=700
+comments         OK    issues=278 withComments=190 maxComments=31 over100=0 newerComment=0 editedComment=2 batches=12 batchMs=2400 batchMsMax=3100
+gql partial      INFO  exit=1 stdoutJson=yes data=1 errors=yes
+```
+
+Gõ lại cả 4 dòng (chỉ có số đếm, mã và thời gian). Cách đọc để chốt thiết kế:
+
+| Quyết định | Đọc ở đâu |
+|---|---|
+| Chu kỳ poll mặc định | `item scan ms` (và `pages`): chu kỳ phải lớn hơn nhiều lần `ms` |
+| `DETAIL_BATCH` | `comments batchMs`/`batchMsMax` (lô 25 id, chỉ lấy comment cuối). `batchMsMax` gần 60 s (timeout mỗi lần gọi) → giảm lô; thấp → có thể tăng. Lô thật còn lấy body + tối đa 100 comment nên nặng hơn: chừa dư |
+| Cách truyền query | `gql stdin`: `OK` → `--input -`; `FAIL` → `-f query=… -F …` |
+| Lỗi một phần | `gql partial`: xem bảng trên |
+| Phân trang comment | `comments over100`: AC-4 vẫn giữ; 0 nghĩa là nhánh phân trang hiếm khi chạy |
+| Giả định cốt lõi | `comments newerComment` phải bằng 0 |
 
 ## Dịch thử một issue (003b)
 

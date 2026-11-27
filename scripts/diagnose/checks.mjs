@@ -299,3 +299,85 @@ export function describeStepFailure(step, e) {
 export function localAppDataState(env) {
   return env.LOCALAPPDATA ? "set" : "unset";
 }
+
+// ---------- 005a: đo cho GhCliGateway (item scan, gql stdin, comments, gql partial) ----------
+/** Chia mảng thành lô tối đa `size` phần tử. */
+export function chunk(arr, size) {
+  const out = [];
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+  return out;
+}
+
+/**
+ * Tóm tắt kết quả quét item (`content{__typename ... on Issue{id updatedAt}}`): chỉ số đếm, không dữ liệu.
+ * `ids` = nodeId của Issue (mỗi id một lần) để dùng cho dòng `comments`/`gql partial`.
+ */
+export function summarizeItemScan(nodes, pages) {
+  const ids = [];
+  const seen = new Set();
+  let issues = 0, pullRequest = 0, draftIssue = 0, inaccessible = 0;
+  for (const n of nodes) {
+    const t = n?.content?.__typename;
+    if (!n?.content) inaccessible++;
+    else if (t === "Issue") {
+      if (typeof n.content.id === "string" && !seen.has(n.content.id)) {
+        seen.add(n.content.id);
+        ids.push(n.content.id);
+        issues++;
+      }
+    } else if (t === "PullRequest") pullRequest++;
+    else if (t === "DraftIssue") draftIssue++;
+  }
+  return { pages, items: nodes.length, issues, pullRequest, draftIssue, inaccessible, ids };
+}
+
+/**
+ * Tóm tắt `nodes(ids:)` với `comments(last:1){totalCount nodes{createdAt updatedAt}}` cho từng Issue.
+ * newerComment: comment cuối có createdAt > Issue.updatedAt (comment mới KHÔNG đẩy Issue.updatedAt).
+ * editedComment: comment cuối có updatedAt > Issue.updatedAt (chỉ nhìn được comment cuối).
+ * Phần tử null/không phải Issue (thiếu updatedAt) bị bỏ qua.
+ */
+export function summarizeComments(issues) {
+  let counted = 0, withComments = 0, maxComments = 0, over100 = 0, newerComment = 0, editedComment = 0;
+  for (const i of issues) {
+    if (!i || typeof i.updatedAt !== "string") continue;
+    counted++;
+    const total = Number.isInteger(i.comments?.totalCount) ? i.comments.totalCount : 0;
+    if (total > 0) withComments++;
+    if (total > maxComments) maxComments = total;
+    if (total > 100) over100++;
+    const last = i.comments?.nodes?.at(-1);
+    if (last) {
+      const issueAt = Date.parse(i.updatedAt);
+      if (Date.parse(last.createdAt) > issueAt) newerComment++;
+      if (Date.parse(last.updatedAt) > issueAt) editedComment++;
+    }
+  }
+  return { issues: counted, withComments, maxComments, over100, newerComment, editedComment };
+}
+
+/** Đổi ký tự cuối của nodeId thành ký tự khác (cùng độ dài, cú pháp hợp lệ) để thử id không còn tồn tại. */
+export function mutateNodeId(id) {
+  const last = id.at(-1);
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+  const next = alphabet[(alphabet.indexOf(last) + 1 + alphabet.length) % alphabet.length] ?? "A";
+  return id.slice(0, -1) + (next === last ? "A" : next);
+}
+
+/** Phân loại kết quả `nodes(ids:[thật, giả])`: exit, stdout có phải JSON có `data` không, số node không null. */
+export function classifyPartial({ code, stdout }) {
+  let json;
+  try {
+    json = JSON.parse(stdout ?? "");
+  } catch {
+    json = undefined;
+  }
+  const nodes = json?.data?.nodes;
+  const hasData = json !== null && typeof json === "object" && json.data !== null && typeof json.data === "object";
+  return {
+    exit: code,
+    stdoutJson: hasData,
+    data: Array.isArray(nodes) ? nodes.filter((n) => n !== null && n !== undefined).length : 0,
+    hasErrors: Array.isArray(json?.errors) && json.errors.length > 0,
+  };
+}

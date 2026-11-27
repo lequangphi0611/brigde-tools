@@ -18,7 +18,7 @@ import { parseArgs } from "node:util";
 import {
   CLAUDE_SCHEMA, CLAUDE_SYSTEM_PROMPT, claudeFixedArgs, findForbiddenFlag, findConfigRangeProblem, classifyClaudeFailure, classifyGhError, compareNodes,
   evaluateCounts, evaluateTranslation, hasProjectScope, isoDay, isoSecond, parseClaudeEnvelope, sampleStdin,
-  analyzeFilter, chooseClaude, diagnoseDataDir, describeStepFailure, localAppDataState, countAfter, pickTimeProbe, describeTaskResult, schedulerDeadlineMs, SCHED_DONE,
+  analyzeFilter, chooseClaude, chunk, summarizeItemScan, summarizeComments, mutateNodeId, classifyPartial, diagnoseDataDir, describeStepFailure, localAppDataState, countAfter, pickTimeProbe, describeTaskResult, schedulerDeadlineMs, SCHED_DONE,
 } from "./checks.mjs";
 
 const SCRIPT = fileURLToPath(import.meta.url);
@@ -64,8 +64,8 @@ function raw(text) {
   if (opt.raw && text) console.log(`    [raw] ${String(text).trim().replace(/\n/g, "\n          ")}`);
 }
 
-function runSync(cmd, args, timeout = 60_000) {
-  const r = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true, timeout, env: process.env });
+function runSync(cmd, args, timeout = 60_000, input = undefined) {
+  const r = spawnSync(cmd, args, { encoding: "utf8", windowsHide: true, timeout, env: process.env, ...(input === undefined ? {} : { input }) });
   return { code: r.status, out: r.stdout ?? "", err: r.stderr ?? "", error: r.error };
 }
 
@@ -226,7 +226,7 @@ function checkGitHub() {
 function checkProject() {
   if (!opt.owner || !opt.number) {
     say("project", "SKIP", "thêm --owner <org> --number <n> để kiểm Projects v2");
-    return;
+    return false;
   }
   const field = opt["owner-type"] === "user" ? "user" : "organization";
   const vars = { login: opt.owner, n: Number(opt.number) };
@@ -238,7 +238,7 @@ function checkProject() {
   const baseCount = base.ok ? base.data?.[field]?.projectV2?.items?.totalCount : undefined;
   if (!base.ok || typeof baseCount !== "number") {
     say("projectsV2", "FAIL", base.ok ? "không đọc được project" : base.cls);
-    return;
+    return false;
   }
   say("projectsV2", "OK", `${baseCount} item`);
   const rate = base.data.rateLimit;
@@ -256,7 +256,7 @@ function checkProject() {
   const gt = count(`updated:>${day}`);
   if (!gt.ok) {
     say("updated:", "FAIL", `${gt.cls} → poller phải lấy hết item rồi lọc phía client`);
-    return;
+    return true;
   }
   const lt = count(`updated:<${day}`);
   const eq = count(`updated:${day}`);
@@ -293,7 +293,7 @@ function checkProject() {
   const fR = fetchAll(`updated:>${day}`);
   if (!allR.ok || !fR.ok) {
     say("filter miss", "WARN", `không lấy được danh sách item (${allR.cls ?? fR.cls})`);
-    return;
+    return true;
   }
   const all = allR.nodes;
   // Mốc an toàn: 2 ngày sau D → lệch múi giờ của server (vd. JST) không làm sai kết luận.
@@ -318,6 +318,118 @@ function checkProject() {
     if (!dt.ok) say("updated time", "WARN", `${dt.cls} → chỉ dùng được mức ngày`);
     else say("updated time", dt.c === expected ? "OK" : "WARN",
       `server ${dt.c}, client ${expected}, cả ngày ${dayOnly.ok ? dayOnly.c : "?"}` + (dt.c === expected ? " → hiểu giờ/phút" : " → không khớp, coi như chỉ mức ngày"));
+  }
+  return true;
+}
+
+// ---------- 005a: đo cho GhCliGateway (item scan, gql stdin, comments, gql partial) ----------
+const DETAIL_BATCH_PROBE = 25;
+
+/** Gọi `gh api graphql` với JSON `{query, variables}` qua stdin (`--input -`). Trả {code, out, err, ms}. */
+function ghStdin(query, variables) {
+  const t = Date.now();
+  const r = runSync("gh", ["api", "graphql", "--input", "-"], 120_000, JSON.stringify({ query, variables }));
+  return { code: r.code, out: r.out, err: r.err, error: r.error, ms: Date.now() - t };
+}
+
+/** Gọi bằng -f/-F như `gql`, nhưng trả nguyên code/stdout (để phân loại lỗi một phần). Biến mảng không có → id đi inline. */
+function ghFlags(query, vars) {
+  const args = ["api", "graphql", "-f", `query=${query.replace(/\s+/g, " ")}`];
+  for (const [k, v] of Object.entries(vars)) args.push(typeof v === "number" ? "-F" : "-f", `${k}=${v}`);
+  const t = Date.now();
+  const r = runSync("gh", args, 120_000);
+  return { code: r.code, out: r.out, err: r.err, error: r.error, ms: Date.now() - t };
+}
+
+function checkGateway() {
+  const field = opt["owner-type"] === "user" ? "user" : "organization";
+  const vars = { login: opt.owner, n: Number(opt.number) };
+
+  // item scan: toàn bộ item, chỉ lấy id + Issue.updatedAt (query của scanProject).
+  const scanQ = `query($login:String!,$n:Int!,$after:String){ ${field}(login:$login){ projectV2(number:$n){ items(first:100, after:$after){ pageInfo{ hasNextPage endCursor } nodes{ content{ __typename ... on Issue{ id updatedAt } } } } } } }`;
+  const nodes = [];
+  let pages = 0, after, failed;
+  const t0 = Date.now();
+  for (let i = 0; i < 50; i++) {
+    const r = gql(scanQ, { ...vars, ...(after ? { after } : {}) });
+    const items = r.ok ? r.data?.[field]?.projectV2?.items : undefined;
+    if (!items) {
+      failed = r.cls ?? "NO_DATA";
+      break;
+    }
+    pages++;
+    nodes.push(...items.nodes.filter(Boolean));
+    if (!items.pageInfo.hasNextPage) break;
+    after = items.pageInfo.endCursor;
+  }
+  const scanMs = Date.now() - t0;
+  if (failed) {
+    say("item scan", "FAIL", `${failed} sau ${pages} trang`);
+    return;
+  }
+  const scan = summarizeItemScan(nodes, pages);
+  say("item scan", "OK", `pages=${scan.pages} items=${scan.items} issues=${scan.issues} pr=${scan.pullRequest} draft=${scan.draftIssue} noaccess=${scan.inaccessible} ms=${scanMs}`);
+
+  // gql stdin: query nhỏ có biến, gửi bằng --input -.
+  const smallQ = `query($login:String!,$n:Int!){ ${field}(login:$login){ projectV2(number:$n){ items(first:1){ totalCount } } } }`;
+  const s = ghStdin(smallQ, vars);
+  let stdinOk = false;
+  if (s.code === 0) {
+    try {
+      stdinOk = typeof JSON.parse(s.out).data?.[field]?.projectV2?.items?.totalCount === "number";
+    } catch {}
+  }
+  if (!stdinOk) raw(s.err || s.out);
+  say("gql stdin", stdinOk ? "OK" : "FAIL", stdinOk ? `ms=${s.ms}` : `${s.error?.code ?? (s.code === 0 ? "BAD_OUTPUT" : classifyGhError(`${s.err}\n${s.out}`))} → quay về -f/-F`);
+
+  // nodes(ids:): qua stdin nếu OK, không thì id inline (id là chuỗi opaque do GitHub cấp, đưa vào literal bằng JSON.stringify).
+  const nodesCall = (ids, selection) => {
+    if (stdinOk) return ghStdin(`query($ids:[ID!]!){ nodes(ids:$ids){ ... on Issue{ ${selection} } } }`, { ids });
+    return ghFlags(`query{ nodes(ids:${JSON.stringify(ids)}){ ... on Issue{ ${selection} } } }`, {});
+  };
+
+  if (scan.ids.length === 0) {
+    say("comments", "SKIP", "board không có Issue");
+    say("gql partial", "SKIP", "board không có Issue");
+    return;
+  }
+
+  // comments: mọi issue, lô DETAIL_BATCH_PROBE, chỉ comment cuối + totalCount.
+  const got = [];
+  let batchFail, batchMsTotal = 0, batches = 0, batchMsMax = 0;
+  for (const ids of chunk(scan.ids, DETAIL_BATCH_PROBE)) {
+    const r = nodesCall(ids, "updatedAt comments(last:1){ totalCount nodes{ createdAt updatedAt } }");
+    batches++;
+    batchMsTotal += r.ms;
+    batchMsMax = Math.max(batchMsMax, r.ms);
+    let data;
+    try {
+      data = r.code === 0 ? JSON.parse(r.out).data?.nodes : undefined;
+    } catch {}
+    if (!Array.isArray(data)) {
+      raw(r.err || r.out);
+      batchFail = r.error?.code ?? (r.code === 0 ? "BAD_OUTPUT" : classifyGhError(`${r.err}\n${r.out}`));
+      break;
+    }
+    got.push(...data);
+  }
+  if (batchFail) say("comments", "FAIL", `${batchFail} ở lô ${batches}`);
+  else {
+    const c = summarizeComments(got);
+    say("comments", c.newerComment === 0 ? "OK" : "WARN",
+      `issues=${c.issues} withComments=${c.withComments} maxComments=${c.maxComments} over100=${c.over100} newerComment=${c.newerComment} editedComment=${c.editedComment}` +
+      ` batches=${batches} batchMs=${Math.round(batchMsTotal / batches)} batchMsMax=${batchMsMax}` +
+      (c.newerComment > 0 ? " → comment mới KHÔNG đẩy Issue.updatedAt, báo lại" : ""));
+  }
+
+  // gql partial: một id thật + một id giả (đổi ký tự cuối) → gh xử lý data lẫn errors thế nào.
+  const real = scan.ids[0];
+  const p = nodesCall([real, mutateNodeId(real)], "id");
+  if (p.error) say("gql partial", "FAIL", p.error.code ?? "SPAWN");
+  else {
+    raw(p.err);
+    const k = classifyPartial({ code: p.code, stdout: p.out });
+    say("gql partial", "INFO", `exit=${k.exit} stdoutJson=${k.stdoutJson ? "yes" : "no"} data=${k.data} errors=${k.hasErrors ? "yes" : "no"}`);
   }
 }
 
@@ -557,7 +669,7 @@ async function main() {
   } else {
     console.log(`gh-issue-translator diagnose — ${new Date().toISOString().slice(0, 10)}\n`);
     checkSqliteFile();
-    if (checkEnv() && checkGitHub()) checkProject();
+    if (checkEnv() && checkGitHub() && checkProject()) checkGateway();
     if (!opt["skip-claude"]) await checkClaude();
     if (opt.scheduler) await checkScheduler();
     if (opt.toast) await checkToast();
