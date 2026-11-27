@@ -1,9 +1,9 @@
-import type { GitHubIssueSnapshot } from "../../../shared/ports/github-gateway.port.ts";
+import type { IssueView } from "./github-view.ts";
 import { bodyContentId, commentContentId, contentHash, titleContentId, type Content } from "./content.ts";
 import { isAfter } from "./timestamps.ts";
 
 /** Mọi Content của snapshot theo thứ tự title, body, comment (theo `createdAt`, rồi nodeId). */
-export function contentsOf(snapshot: GitHubIssueSnapshot): Content[] {
+export function contentsOf(snapshot: IssueView): Content[] {
   const comments = [...snapshot.comments].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt) || a.nodeId.localeCompare(b.nodeId));
   return [
     { id: titleContentId(snapshot.nodeId), kind: "title", ghId: null, author: null, text: snapshot.title, hash: contentHash(snapshot.title), ghCreatedAt: null, ghUpdatedAt: snapshot.updatedAt },
@@ -38,7 +38,7 @@ export interface ContentDiff {
  * Content đã lưu mà snapshot không còn (comment bị xoá) không xuất hiện ở đây nên được giữ nguyên.
  */
 export function diffContents(input: {
-  snapshot: GitHubIssueSnapshot;
+  snapshot: IssueView;
   storedHashes: ReadonlyMap<string, string>;
   contentsLoaded: boolean;
   previousUpdatedAt: string;

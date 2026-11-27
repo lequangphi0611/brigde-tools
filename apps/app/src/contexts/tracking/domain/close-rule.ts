@@ -1,4 +1,4 @@
-import type { ProjectIssueStamp } from "../../../shared/ports/github-gateway.port.ts";
+import type { IssueStamp } from "./github-view.ts";
 
 /** Quy tắc "issue đã đóng" theo project (005b): `state = CLOSED` hoặc Status thuộc `closedStatuses`. */
 export interface CloseRule {
@@ -11,7 +11,7 @@ export function normalizeStatusName(name: string): string {
   return name.normalize("NFKC").trim().toLowerCase();
 }
 
-export function isIssueClosed(stamp: Pick<ProjectIssueStamp, "state" | "status">, rule: CloseRule): boolean {
+export function isIssueClosed(stamp: Pick<IssueStamp, "state" | "status">, rule: CloseRule): boolean {
   if (stamp.state === "CLOSED") return true;
   if (stamp.status === null || rule.closedStatuses.length === 0) return false;
   const status = normalizeStatusName(stamp.status.name);

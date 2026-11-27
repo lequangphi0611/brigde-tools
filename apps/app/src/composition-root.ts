@@ -16,6 +16,7 @@ import { SqliteSettingStore } from "./shared/infrastructure/sqlite/sqlite-settin
 import type { SettingStore } from "./shared/ports/setting-store.port.ts";
 import { SqliteTranslationCache } from "./contexts/translation/infrastructure/sqlite-translation-cache.ts";
 import { InProcessEventBus } from "./shared/infrastructure/events/in-process-event-bus.ts";
+import { classifyStorageFailure } from "./shared/infrastructure/sqlite/storage-error.ts";
 import { SqliteUnitOfWork } from "./shared/infrastructure/sqlite/sqlite-unit-of-work.ts";
 import { PollCycle, type PollProjectConfig } from "./contexts/tracking/application/poll-cycle.ts";
 import { SqliteTrackingRepository } from "./contexts/tracking/infrastructure/sqlite-tracking-repository.ts";
@@ -51,6 +52,7 @@ export function buildDeps(mode: string | undefined): Deps {
       publisher: new InProcessEventBus(), // chưa có bên nghe (006/007 đăng ký ở đây)
       clock,
       project: FAKE_POLL_PROJECT,
+      classifyStorageError: classifyStorageFailure,
     });
     return {
       translator: new CachingTranslator({

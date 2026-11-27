@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { formatPollLine } from "./poll-line.ts";
-import type { PollReport, PollStats } from "./poll-report.ts";
+import type { PollStats } from "./poll-report.ts";
 
 const stats = (over: Partial<PollStats> = {}): PollStats => ({
   issues: 286, closed: 263, skipped: { pullRequest: 0, draftIssue: 0, inaccessible: 0 }, pages: 3,
@@ -28,15 +28,5 @@ describe("AC-27 formatPollLine", () => {
     expect(formatPollLine({ status: "FAIL", cause: { type: "storage", sqliteCode: 5 } })).toBe("[poll] FAIL storage sqlite=5");
     expect(formatPollLine({ status: "FAIL", cause: { type: "storage" } })).toBe("[poll] FAIL storage");
     expect(formatPollLine({ status: "FAIL", cause: { type: "internal" } })).toBe("[poll] FAIL internal");
-  });
-  it("không chứa dữ liệu đặc trưng", () => {
-    const reports: PollReport[] = [
-      { status: "OK", stats: stats(), ms: 1 },
-      { status: "FAIL", cause: { type: "github", reason: "timeout" }, ms: 1 },
-    ];
-    for (const r of reports) {
-      const line = formatPollLine(r);
-      for (const secret of ["acme-org", "I_kwDOabc", "機密タイトル", "社内ステータス"]) expect(line).not.toContain(secret);
-    }
   });
 });

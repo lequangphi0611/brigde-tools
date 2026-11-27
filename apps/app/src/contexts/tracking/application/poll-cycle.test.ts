@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { openAppStorage } from "../../../shared/infrastructure/sqlite/app-storage.ts";
+import { classifyStorageFailure } from "../../../shared/infrastructure/sqlite/storage-error.ts";
+import { formatPollLine } from "./poll-line.ts";
 import { SqliteUnitOfWork } from "../../../shared/infrastructure/sqlite/sqlite-unit-of-work.ts";
 import type { Database } from "../../../shared/infrastructure/sqlite/open-database.ts";
 import {
@@ -57,7 +59,7 @@ class Env {
   cycle() {
     return new PollCycle({
       github: this.github, repository: this.repo, unitOfWork: new SqliteUnitOfWork(this.db), publisher: this.bus,
-      clock: this.clock, project: this.project, elapsedClock: () => 0,
+      clock: this.clock, project: this.project, elapsedClock: () => 0, classifyStorageError: classifyStorageFailure,
     });
   }
   run(): Promise<PollReport> {
@@ -238,6 +240,7 @@ describe("AC-14…17 lỗi và missing", () => {
   it("AC-14 lỗi khi quét: không ghi gì, chu kỳ sau bình thường", async () => {
     await baseline([{ issue: issue("A", "10:00") }]);
     const before = env.repo.getProject(env.pid);
+    const rowsBefore = env.repo.listIssues(env.pid);
     const real = env.github.scanProject.bind(env.github);
     env.github.scanProject = async () => {
       throw new GitHubFailure("not_authenticated");
@@ -245,6 +248,7 @@ describe("AC-14…17 lỗi và missing", () => {
     const r = await env.run();
     expect(r).toMatchObject({ status: "FAIL", cause: { type: "github", reason: "not_authenticated" } });
     expect(env.repo.getProject(env.pid)).toEqual(before);
+    expect(env.repo.listIssues(env.pid)).toEqual(rowsBefore);
     expect(env.events()).toEqual([]);
     env.github.scanProject = real;
     env.board([{ issue: issue("A", "10:00") }, { issue: issue("N", "10:30") }]);
@@ -365,6 +369,16 @@ describe("AC-18…23 issue đóng", () => {
     expect(r).toMatchObject({ status: "BASELINE", warn: "status_field_missing" });
     env.github.load({ project: env.project, statusField: { name: "Status", kind: "text", options: [] }, items: [{ kind: "issue", issue: issue("A", "10:00") }] });
     expect(await env.run()).toMatchObject({ warn: "status_field_not_single_select" });
+    // chỉ state quyết định đóng: Status "Done" không làm đóng, state CLOSED thì đóng
+    env.github.load({
+      project: env.project,
+      statusField: { name: "Status", kind: "text", options: [] },
+      items: [{ kind: "issue", issue: issue("S", "10:00"), status: "Done" }, { kind: "issue", issue: issue("X", "10:00"), state: "CLOSED" }],
+    });
+    const r2 = await env.run();
+    expect(stats(r2).closed).toBe(1);
+    expect(env.repo.getIssue("X")?.closed).toBe(true);
+    expect(env.repo.getIssue("S")?.closed).toBe(false);
   });
 });
 
@@ -398,5 +412,66 @@ describe("AC-24/25", () => {
       throw new Error("boom");
     };
     expect(await env.run()).toMatchObject({ status: "FAIL", cause: { type: "internal" } });
+  });
+});
+
+describe("chạy chồng (ADR-0011)", () => {
+  it("hai run() song song trên cùng PollCycle chia sẻ một chu kỳ: mỗi event đúng một lần", async () => {
+    await baseline([]);
+    env.board([{ issue: issue("N", "10:00") }]);
+    const cycle = env.cycle();
+    const [a, b] = await Promise.all([cycle.run(), cycle.run()]);
+    expect(a).toBe(b);
+    expect(env.detailCalls).toHaveLength(1);
+    expect(types(env.take())).toEqual(["ID:N", "CC:N:new_issue:title:N,body:N"]);
+  });
+  it("hai PollCycle riêng chạy song song trên cùng DB: transaction đọc lại và bỏ qua issue đã xử lý", async () => {
+    await withContent(issue("A", "10:00"));
+    env.board([{ issue: issue("A", "10:30", { comments: [cm("c2", "10:30")] }) }, { issue: issue("N", "10:40") }]);
+    const [r1, r2] = await Promise.all([env.cycle().run(), env.cycle().run()]);
+    expect([r1.status, r2.status]).toEqual(["OK", "OK"]);
+    expect(types(env.take()).sort()).toEqual(["CC:A:new_comment:comment:c2", "CC:N:new_issue:title:N,body:N", "ID:N"]);
+  });
+});
+
+describe("FAIL storage", () => {
+  it("lỗi SQLite khi ghi lấy mốc là FAIL storage sqlite=<mã>, lỗi ngoài danh mục là internal", async () => {
+    env.board([{ issue: issue("A", "10:00") }]);
+    env.repo.saveIssue = () => {
+      throw Object.assign(new Error("busy"), { errcode: 5 });
+    };
+    const r = await env.run();
+    expect(r).toMatchObject({ status: "FAIL", cause: { type: "storage", sqliteCode: 5 } });
+    expect(formatPollLine(r)).toMatch(/^\[poll\] FAIL storage sqlite=5$/);
+    env.repo.saveIssue = () => {
+      throw new Error("lạ");
+    };
+    expect(await env.run()).toMatchObject({ cause: { type: "internal" } });
+  });
+});
+
+describe("AC-27 dòng log không lộ dữ liệu", () => {
+  it("chạy chu kỳ thật với dữ liệu đặc trưng rồi kiểm dòng log", async () => {
+    env.project = { owner: "acme-org", ownerType: "org", number: 4242, statusField: "社内ステータス", closedStatuses: ["機密完了"] };
+    const secret = ["acme-org", "I_kwDOsecret", "機密タイトル", "社内ステータス", "機密完了", "4242"];
+    const mk = (hm: string, extra: Partial<GitHubIssueSnapshot> = {}) => issue("I_kwDOsecret", hm, { title: "機密タイトル", ...extra });
+    env.github.load({
+      project: env.project,
+      statusField: { name: "社内ステータス", kind: "single_select", options: [{ name: "機密完了", optionId: "o" }] },
+      items: [{ kind: "issue", issue: mk("10:00"), status: "機密完了" }],
+    });
+    const lines = [formatPollLine(await env.run())];
+    env.github.load({
+      project: env.project,
+      statusField: { name: "社内ステータス", kind: "single_select", options: [{ name: "機密完了", optionId: "o" }] },
+      items: [{ kind: "issue", issue: mk("11:00", { comments: [cm("c9", "11:00")] }) }, { kind: "issue", issue: issue("I_kwDOnew", "11:00") }],
+    });
+    lines.push(formatPollLine(await env.run()));
+    env.github.scanProject = async () => {
+      throw new GitHubFailure("timeout", "acme-org");
+    };
+    lines.push(formatPollLine(await env.run()));
+    for (const line of lines) for (const s of secret) expect(line).not.toContain(s);
+    expect(lines.map((l) => l.split(" ")[1])).toEqual(["BASELINE", "OK", "FAIL"]);
   });
 });

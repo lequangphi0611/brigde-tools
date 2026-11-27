@@ -43,13 +43,18 @@ export class PollScheduler {
     if (this.running || this.stopped) return;
     this.running = true;
     this.cancelTimer = null;
+    let line: string;
     try {
-      this.deps.log(formatPollLine(await this.deps.runCycle()));
+      line = formatPollLine(await this.deps.runCycle());
     } catch {
-      this.deps.log(formatPollLine({ status: "FAIL", cause: { type: "internal" } }));
-    } finally {
-      this.running = false;
+      line = formatPollLine({ status: "FAIL", cause: { type: "internal" } });
     }
+    try {
+      this.deps.log(line);
+    } catch {
+      // log lỗi không được làm dừng vòng lặp
+    }
+    this.running = false;
     if (this.stopped) return;
     const schedule = this.deps.schedule ?? defaultSchedule;
     this.cancelTimer = schedule(() => void this.tick(), this.deps.pollIntervalMin * 60_000);

@@ -1,4 +1,4 @@
-import type { ProjectIssueStamp } from "../../../shared/ports/github-gateway.port.ts";
+import type { IssueStamp } from "./github-view.ts";
 import { isIssueClosed, type CloseRule } from "./close-rule.ts";
 import type { StoredIssue } from "./issue.ts";
 import { isAfter } from "./timestamps.ts";
@@ -21,7 +21,7 @@ export function needsDetails(kind: TrackingDecisionKind): boolean {
  * Không dùng Clock: chỉ so mốc GitHub với mốc GitHub đã lưu.
  */
 export function trackingDecision(input: {
-  stamp: Pick<ProjectIssueStamp, "updatedAt" | "state" | "status">;
+  stamp: Pick<IssueStamp, "updatedAt" | "state" | "status">;
   stored: Pick<StoredIssue, "ghUpdatedAt"> | undefined;
   closeRule: CloseRule;
   baselined: boolean;

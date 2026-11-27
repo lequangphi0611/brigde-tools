@@ -71,4 +71,21 @@ describe("AC-26 PollScheduler", () => {
     await new Promise((r) => setTimeout(r, 20));
     expect(running.timers).toHaveLength(0);
   });
+  it("log ném lỗi không làm dừng vòng lặp hay gây unhandled rejection", async () => {
+    const timers: Array<() => void> = [];
+    const sched = new PollScheduler({
+      pollIntervalMin: 1,
+      log: () => {
+        throw new Error("log hỏng");
+      },
+      runCycle: async () => ok,
+      schedule: (fn) => {
+        timers.push(fn);
+        return () => {};
+      },
+    });
+    sched.start();
+    await flush();
+    expect(timers).toHaveLength(1);
+  });
 });

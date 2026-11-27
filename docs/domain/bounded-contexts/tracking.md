@@ -13,7 +13,8 @@
 
 ### `Issue` (aggregate root)
 - Trường: `id` (GitHub node id), `projectId`, `repo`, `number`, `url`, `assignees`, `listening` (`null` = kế thừa; **chưa có ở 005b**, thêm ở 006b), `readAt` (010), `ghUpdatedAt`, `closed` (005b), `contentsLoaded` (005b; `false` = issue chỉ có mốc, `repo`/`number`/`url`/`assignees` chưa có).
-- Chứa danh sách `Content` (entity): `id` (`ContentId`: `title:<issueId>` / `body:<issueId>` / `comment:<commentNodeId>`), `kind: title|body|comment`, `ghId`, `author`, `textJa` (nguyên văn, không chuẩn hoá), `hash` (sha256 của text nguyên văn), `ghCreatedAt`, `ghUpdatedAt`.
+- Trong code, dạng lưu của `Issue` là `StoredIssue` (`domain/issue.ts`; giữ tên vì chưa gồm danh sách `Content`, repository đọc `Content` riêng). Domain khai báo kiểu tối thiểu của dữ liệu GitHub ở `domain/github-view.ts` (không import port).
+- Chứa danh sách `Content` (entity): `id` (`ContentId`: `title:<issueId>` / `body:<issueId>` / `comment:<commentNodeId>`), `kind: title|body|comment`, `ghId`, `author`, `text` (bản gốc tiếng Nhật nguyên văn, không chuẩn hoá), `hash` (sha256 của text nguyên văn), `ghCreatedAt`, `ghUpdatedAt`.
 - **Invariant:**
   - Listen hiệu lực = `issue.listening ?? project.listening`.
   - Unlisten issue → nội dung mới không vào hàng đợi; có thể `translateNow`.
@@ -24,7 +25,7 @@
   - Issue trong `missing` của `fetchIssueDetails` hoặc biến khỏi board: giữ dữ liệu, không event, mốc không tiến. Quay lại board với `nodeId` đã biết thì so mốc bình thường (không phải issue mới).
 
 ## Domain events
-Kiểu event (published language) ở `apps/app/src/shared/events/`, chỉ chứa ID + `reason` + thời điểm, không chứa nội dung. Phát qua `DomainEventPublisher` **đồng bộ trong transaction** của bên phát, mỗi issue một transaction (ADR-0011, Proposed): lưu trạng thái và giao event commit/rollback cùng nhau.
+Kiểu event (published language) ở `apps/app/src/shared/events/`, chỉ chứa ID + `reason` + thời điểm, không chứa nội dung. Phát qua `DomainEventPublisher` **đồng bộ trong transaction** của bên phát, mỗi issue một transaction (ADR-0011, Accepted): lưu trạng thái và giao event commit/rollback cùng nhau.
 
 | Event | Khi nào | Ai nghe |
 |---|---|---|

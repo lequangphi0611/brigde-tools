@@ -1,5 +1,4 @@
 import type { DomainEvent } from "../../../shared/events/domain-event.ts";
-import { sqliteErrorInfo } from "../../../shared/infrastructure/sqlite/storage-error.ts";
 import type { Clock } from "../../../shared/ports/clock.port.ts";
 import type { DomainEventPublisher } from "../../../shared/ports/domain-event-publisher.port.ts";
 import {
@@ -28,23 +27,44 @@ export interface PollCycleDeps {
   readonly publisher: DomainEventPublisher;
   readonly clock: Clock;
   readonly project: PollProjectConfig;
+  /** Phân loại lỗi lưu trữ (lắp ở composition root): `undefined` = không phải lỗi lưu trữ. */
+  readonly classifyStorageError: (e: unknown) => { sqliteCode?: number } | undefined;
   /** Đồng hồ đo thời gian chạy (ms); mặc định `performance.now`. */
   readonly elapsedClock?: () => number;
 }
 
 /** Một chu kỳ poll của một project (ADR-0010, ADR-0011). Mọi `await` xong trước khi mở transaction đầu tiên. */
 export class PollCycle {
+  private inFlight: Promise<PollReport> | null = null;
+
   constructor(private readonly deps: PollCycleDeps) {}
 
-  async run(): Promise<PollReport> {
+  /** Gọi khi một chu kỳ đang chạy thì nhận lại kết quả của chu kỳ đó (không chạy chồng). */
+  run(): Promise<PollReport> {
+    if (this.inFlight) return this.inFlight;
+    const running = this.runOnce().finally(() => {
+      this.inFlight = null;
+    });
+    this.inFlight = running;
+    return running;
+  }
+
+  private async runOnce(): Promise<PollReport> {
     const timer = this.deps.elapsedClock ?? (() => performance.now());
     const started = timer();
     const ms = () => Math.round(timer() - started);
     try {
       return await this.runCycle(ms);
     } catch (e) {
-      return { status: "FAIL", cause: failureCause(e), ms: ms() };
+      return { status: "FAIL", cause: this.failureCause(e), ms: ms() };
     }
+  }
+
+  private failureCause(e: unknown): PollFailureCause {
+    if (e instanceof GitHubFailure) return { type: "github", reason: e.reason };
+    const storage = this.deps.classifyStorageError(e);
+    if (storage) return { type: "storage", ...(storage.sqliteCode !== undefined ? { sqliteCode: storage.sqliteCode } : {}) };
+    return { type: "internal" };
   }
 
   private async runCycle(ms: () => number): Promise<PollReport> {
@@ -87,7 +107,6 @@ export class PollCycle {
     }
 
     for (const { stamp, decision } of planned) {
-      const previous = stored.get(stamp.nodeId);
       const snapshot = snapshots.get(stamp.nodeId);
       if (needsDetails(decision.kind) && !snapshot) {
         counts.missing++;
@@ -95,9 +114,13 @@ export class PollCycle {
       }
       try {
         const result = unitOfWork.run(() => {
+          // Đọc lại trong transaction: nếu chu kỳ khác đã xử lý issue này thì bỏ qua (không phát event trùng, ADR-0011).
+          const current = repository.getIssue(stamp.nodeId);
+          const again = trackingDecision({ stamp, stored: current, closeRule: project, baselined: true });
+          if (again.kind !== decision.kind) return { newIssues: 0, newComments: 0, edited: 0, closedChanged: 0 };
           const events: DomainEvent[] = [];
           const delta = { newIssues: 0, newComments: 0, edited: 0, closedChanged: 0 };
-          apply({ repository, decision, projectId, stamp, previous, snapshot, events, delta, occurredAt: now() });
+          apply({ repository, decision, projectId, stamp, previous: current, snapshot, events, delta, occurredAt: now() });
           if (events.length > 0) publisher.publish(events);
           return delta;
         });
@@ -128,14 +151,6 @@ function warning(scan: ProjectScan, rule: CloseRule): PollWarning | undefined {
   if (scan.statusField === "missing") return "status_field_missing";
   if (scan.statusField === "not_single_select") return "status_field_not_single_select";
   return undefined;
-}
-
-function failureCause(e: unknown): PollFailureCause {
-  if (e instanceof GitHubFailure) return { type: "github", reason: e.reason };
-  const { sqliteCode } = sqliteErrorInfo(e);
-  if (sqliteCode !== undefined) return { type: "storage", sqliteCode };
-  if (e instanceof Error && e.name === "StorageError") return { type: "storage" };
-  return { type: "internal" };
 }
 
 interface ApplyInput {
