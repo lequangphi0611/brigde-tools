@@ -1,6 +1,6 @@
 # 004 — Lưu trữ SQLite + migration + bảng `setting`
 
-- Trạng thái: approved
+- Trạng thái: done
 - Context: hạ tầng dùng chung (`apps/app/src/shared`), phục vụ Tracking / Translation / Notification
 - Cần UI: không
 
@@ -248,3 +248,4 @@ Không có.
 | 5 Verify | 2026-11-27 | Orchestrator chạy `pnpm verify`: typecheck xanh, 223 unit pass, lock OK, e2e 1/1 pass |
 | 6 Review | 2026-11-27 | Vòng 1: 0 must-fix. Đã sửa S1 (không ghi header/WAL trước quick_check và kiểm schema_too_new, `openDatabase(path, {wal:false})` + `enableWal()`), S2 (APP_DATA_DIR tuyệt đối theo nền tảng, đồng bộ diagnose), N1 (lỗi hỏng DB lúc migrate → corrupt), N2 (đuôi .sql không phân biệt hoa thường), N3 (test clearAllTables có khoá ngoại), N5 (fsErrorCode theo errcode). S3 (dòng lỗi `main.ts` có đường dẫn DB + test hàm format) dời sang 005; N4 để lại vì diagnose đã kiểm WAL |
 | 6 Review vòng 2 | 2026-11-27 | 0 must-fix. Sửa hồi quy từ S1: lỗi SQLite thô từ `enableWal()`/kiểm schema trong `openAppStorage` nay bọc thành `StorageError` (`open_failed`, hoặc `corrupt`), có test giữ khoá đọc (BUSY, sqliteCode 5). Nit test N1 dùng Database giả: chấp nhận |
+| 7 PR | 2026-11-27 | Verify xanh (235 unit, lock OK, e2e 1/1); chờ GATE 4 |
