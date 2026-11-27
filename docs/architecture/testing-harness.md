@@ -12,13 +12,14 @@ Mục tiêu: Claude implement được mà **không cần** GitHub thật, `clau
 
 ## Chạy app ở chế độ fake
 
-`APP_ADAPTERS=fake` → `composition-root.ts` lắp `FakeGitHub`, `FakeTranslator` (`"[vi] " + text`), `RecordingNotifier`, `ControllableClock`, và mount `/__test__/*`:
+`APP_ADAPTERS=fake` → `composition-root.ts` lắp `FakeGitHub`, `FakeTranslator` (`"[vi] " + text`), `RecordingNotifier`, `ControllableClock`, `PollCycle` (với `InProcessEventBus`, `SqliteTrackingRepository`) và mount `/__test__/*`:
 
 | Endpoint | Tác dụng |
 |---|---|
 | `POST /__test__/reset` | Xoá state: issue giả, toast, đồng hồ, và mọi hàng của mọi bảng SQLite (giữ schema và `user_version`) |
 | `POST /__test__/github/issues` | Nạp issue giả (`GitHubIssueSnapshot`; `comments` tuỳ chọn, mặc định `[]`) thành board chỉ có Issue OPEN, không Status (`FakeGitHub.seedIssues`) |
 | `POST /__test__/clock` | Đặt giờ hiện tại |
+| `POST /__test__/poll` | Chạy **một** `PollCycle` (005b) với project cố định `fake/org/1` trên `FakeGitHub` và bảng Tracking thật; trả `PollReport` JSON. Không có chu kỳ nào tự chạy. Chu kỳ đầu sau reset là `BASELINE`. `Harness.runPoll()`; dùng: `seedIssues` → `runPoll()` (lấy mốc) → `seedIssues` thêm → `runPoll()` (phát hiện) |
 | `GET /__test__/toasts` | Toast đã bắn |
 
 Chế độ fake dùng **SQLite thật** ở `:memory:` (ADR-0008, `openAppStorage`) thay vì repository fake: schema và migration chạy như thật, không tạo file nào trong `dataDir`; mỗi lần `buildDeps("fake")` là một DB độc lập.

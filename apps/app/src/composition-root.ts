@@ -15,6 +15,10 @@ import type { Database } from "./shared/infrastructure/sqlite/open-database.ts";
 import { SqliteSettingStore } from "./shared/infrastructure/sqlite/sqlite-setting-store.ts";
 import type { SettingStore } from "./shared/ports/setting-store.port.ts";
 import { SqliteTranslationCache } from "./contexts/translation/infrastructure/sqlite-translation-cache.ts";
+import { InProcessEventBus } from "./shared/infrastructure/events/in-process-event-bus.ts";
+import { SqliteUnitOfWork } from "./shared/infrastructure/sqlite/sqlite-unit-of-work.ts";
+import { PollCycle, type PollProjectConfig } from "./contexts/tracking/application/poll-cycle.ts";
+import { SqliteTrackingRepository } from "./contexts/tracking/infrastructure/sqlite-tracking-repository.ts";
 import { ControllableClock, FakeGitHub, RecordingNotifier } from "./test-harness/fakes.ts";
 
 export interface Deps {
@@ -26,8 +30,11 @@ export interface Deps {
   /** Handle SQLite dùng chung; đóng khi tắt app. */
   storage: Database;
   /** Chỉ có khi chạy fake — để mount test-harness routes. */
-  harness?: { storage: Database; github: FakeGitHub; notifier: RecordingNotifier; clock: ControllableClock };
+  harness?: { storage: Database; github: FakeGitHub; notifier: RecordingNotifier; clock: ControllableClock; pollCycle: PollCycle };
 }
+
+/** Project cố định của chế độ fake (005b); chu kỳ chỉ chạy khi test gọi `POST /__test__/poll`. */
+export const FAKE_POLL_PROJECT: PollProjectConfig = { owner: "fake", ownerType: "org", number: 1, statusField: "Status", closedStatuses: [] };
 
 /** Nơi DUY NHẤT quyết định adapter thật hay fake. */
 export function buildDeps(mode: string | undefined): Deps {
@@ -37,6 +44,14 @@ export function buildDeps(mode: string | undefined): Deps {
     const clock = new ControllableClock();
     // Fake dùng SQLite thật trong bộ nhớ (ADR-0008), không đụng tới dataDir.
     const storage = openAppStorage({ path: ":memory:" });
+    const pollCycle = new PollCycle({
+      github,
+      repository: new SqliteTrackingRepository(storage),
+      unitOfWork: new SqliteUnitOfWork(storage),
+      publisher: new InProcessEventBus(), // chưa có bên nghe (006/007 đăng ký ở đây)
+      clock,
+      project: FAKE_POLL_PROJECT,
+    });
     return {
       translator: new CachingTranslator({
         inner: new FakeTranslator(),
@@ -48,7 +63,7 @@ export function buildDeps(mode: string | undefined): Deps {
       clock,
       settings: new SqliteSettingStore(storage),
       storage,
-      harness: { storage, github, notifier, clock },
+      harness: { storage, github, notifier, clock, pollCycle },
     };
   }
   // TODO(spike): adapter thật — ClaudeCliTranslator, GhCliGateway, WindowsToastNotifier.
