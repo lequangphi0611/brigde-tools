@@ -65,6 +65,20 @@ describe("runGhCli", () => {
     expect(rec!.env).toMatchObject({ GH_HOST: MARKER_HOST, GH_PROMPT_DISABLED: "1", GH_NO_UPDATE_NOTIFIER: "1", NO_COLOR: "1" });
   });
 
+  it("AC-8: GH_HOST đặt ở process.env của process cha (không qua config.env) đi xuống process gh", async () => {
+    const { config, records } = setup("ok");
+    const { GH_HOST: _omit, ...envWithoutHost } = config.env!;
+    const saved = process.env["GH_HOST"];
+    process.env["GH_HOST"] = "parent-env.example.test";
+    try {
+      await runGhCli({ ...config, env: envWithoutHost }, SCAN);
+    } finally {
+      if (saved === undefined) delete process.env["GH_HOST"];
+      else process.env["GH_HOST"] = saved;
+    }
+    expect(records()[0]!.env.GH_HOST).toBe("parent-env.example.test");
+  });
+
   it("ba biến cố định thắng env cấu hình", async () => {
     const { config, records } = setup("ok", {}, { GH_PROMPT_DISABLED: "0" });
     await runGhCli(config, SCAN);
