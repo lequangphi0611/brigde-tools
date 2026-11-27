@@ -6,7 +6,9 @@ import { afterAll, describe, expect, it } from "vitest";
 import { contractFixture } from "../../shared/ports/testing/github-gateway.contract.ts";
 
 // Spawn đúng lệnh người dùng gõ (`pnpm -s github-check`) với một `gh` giả đứng đầu PATH.
-// Windows: spawn không shell không chạy được .cmd nên bỏ qua; kiểm trên máy thật bằng github-check.
+// Windows: bỏ qua có chủ đích. Shim `gh` phải là .cmd mà spawn không shell của adapter không chạy được; muốn chạy cần thêm
+// cấu hình lệnh gh vào code production chỉ cho test. Cùng đường code đã được run-github-check.test.ts phủ trên mọi OS
+// (dùng fake gh qua process.execPath + argsPrefix); trên máy Windows thật kiểm bằng chạy `github-check`.
 const REPO = fileURLToPath(new URL("../../../../../", import.meta.url));
 const FAKE = path.join(REPO, "apps/app/src/contexts/tracking/infrastructure/gh-cli/testing/fake-gh.mjs");
 const base = path.join(REPO, "node_modules", ".cache");

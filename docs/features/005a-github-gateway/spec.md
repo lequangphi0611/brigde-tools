@@ -386,12 +386,17 @@ Không còn câu hỏi chặn 005a. Các điểm "Cần kiểm chứng" (`--inpu
 | Điểm dừng | 2026-11-27 | Số đo máy thật ghi ở `docs/spikes/projects-v2-polling.md` Lần 4. Chốt: (a) `DETAIL_BATCH = 25` (lô ≈ 0,5 s); (b) query + biến qua `--input -`; (c) lỗi một phần: dùng `data` từ stdout dù exit 1, AC-6 giữ nguyên; (d) phân trang comment giữ (AC-4), `over100=0`; (e) `fieldValueByName` / `field(name:)` chạy trên GHES 3.20, quy tắc close dùng cả state lẫn Status. `newerComment=0` → làm tiếp bước 2 |
 | 4 Implement bước 2–7 | 2026-11-27 | Bước 2 `fd2fe22` (port, contract, FakeGitHub), 3 `6a083f9` (fake-gh.mjs), 4 `486b69f` (runGhCli), 5 `GhCliGateway` (DETAIL_BATCH=25, zod, projectV2 null → project_not_found), 6 `github-check`, 7 docs (diagnose.md, CLAUDE.md, rà tên cũ). ADR-0010 vẫn Proposed, chờ user duyệt cuối story. Ghi chú: `editedComment` đếm cả comment mới (updatedAt ≥ createdAt) theo đúng định nghĩa spec |
 | Review 005a | 2026-11-27 | Sửa must-fix `b2d7c0a` (thiếu scope không báo nhầm `project_not_found`: `failureHint`) và should-fix (timeout reject ngay không đợi `close`). ADR-0010 cập nhật kết quả đo, vẫn Proposed |
-
-## Finding để lại (nit, chưa sửa)
-- Regex `network` của `classifyGhFailure` rộng (`connect`, `timeout`, `proxy` …): có thể xếp nhầm lỗi khác vào `network`; vẫn an toàn (không lộ dữ liệu). Thu hẹp khi có mẫu stderr thật.
-- `GhCliGateway.detailStats` là trạng thái dùng chung của instance: hai `fetchIssueDetails` chạy song song sẽ ghi đè số đếm. 005b xử lý (trả số đếm trong kết quả hoặc dùng instance riêng) khi poller dùng gateway.
-- Contract test `github-gateway.contract.ts` nằm trong `shared/ports` nhưng import fixture từ `test-harness/`; cân nhắc dời sang `test-harness/` hoặc `testing/`.
-- Test tạo thư mục tạm (`fake-gh-*`, `gh-runner-test-*`) và không dọn.
-- Test đặt `GH_HOST` qua env của process con/`config.env`; một số chỗ dựa vào `process.env` thừa kế từ máy chạy test.
-- `github-check.process.test.ts` bị skip trên Windows (spawn không shell không chạy được shim `.cmd`); trên máy thật kiểm bằng chạy `github-check`.
 | 7 PR | 2026-11-27 | GATE 4: user duyệt tạo PR, chạy `github-check` trên máy thật trước khi merge. ADR-0010 → Accepted. Review vòng 2 APPROVED (nit: kill trên Windows chỉ diệt `gh.exe`, không diệt cây process) |
+| Sửa finding còn lại | 2026-11-27 | Sửa 6/7 finding (xem dưới), chỉ `github-check.process.test.ts` vẫn skip trên Windows. Commit `fix(tracking)`/`refactor(tracking)`/`test(tracking)` (005a) |
+
+## Finding để lại
+Đã sửa:
+- ~~Regex `network` rộng~~: `classifyGhFailure` chỉ khớp mẫu lỗi mạng cụ thể (errno, `dial tcp`, `connection refused/reset`, `i/o timeout`, `TLS handshake timeout`, `x509:`…); chữ `connect`/`timeout`/`proxy` trần → `process_failed`.
+- ~~`detailStats` dùng chung trên instance~~: bỏ; `GhCliGateway.fetchIssueDetailsWithStats` trả `{ details, stats }` theo từng lần gọi (port `GitHubGateway` không đổi), `github-check` dùng cách này. Có test gọi song song.
+- ~~Contract test nằm trong `shared/ports`~~: dời sang `apps/app/src/shared/ports/testing/github-gateway.contract.ts` (app chạy bằng `tsx`, không có bước build nên không vào code chạy).
+- ~~Thư mục tạm không dọn~~: `fake-gh-setup.ts`, `gh-cli-runner.test.ts`, `fake-gh.test.ts` dọn bằng `afterAll` (`rmSync` recursive force).
+- ~~`GH_HOST` chỉ qua `config.env`~~: thêm test AC-8 đặt `GH_HOST` qua `process.env` của process cha, khôi phục sau test.
+- ~~Kill chỉ diệt `gh.exe` trên Windows~~: `treeKillCommand` (hàm thuần, có test) chọn `taskkill /pid <pid> /T /F` khi `win32` (spawn không shell, windowsHide, bỏ qua lỗi); nơi khác giữ `SIGKILL`, không kill process group.
+
+Chưa sửa:
+- `github-check.process.test.ts` vẫn skip trên Windows. Lý do: test chạy đúng lệnh người dùng gõ (`pnpm -s github-check`) với `gh` giả đứng đầu `PATH`; Windows cần shim `.cmd` mà `spawn` không shell của adapter không chạy được, còn cách khác phải thêm cấu hình lệnh `gh` vào code production chỉ để phục vụ test, và không kiểm chứng được trong container. Phần logic cùng đường code đã được `run-github-check.test.ts` phủ trên mọi OS; trên máy Windows thật kiểm bằng chạy `github-check`.
