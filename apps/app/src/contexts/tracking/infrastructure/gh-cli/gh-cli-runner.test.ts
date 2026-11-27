@@ -130,6 +130,13 @@ describe("runGhCli", () => {
     expect(Date.now() - started).toBeLessThan(5000);
   });
 
+  it("timeout reject ngay dù con của gh giữ pipe nên 'close' không phát", async () => {
+    const started = Date.now();
+    const f = await failure(setup("hang-grandchild", { timeoutMs: 300 }).config);
+    expect(f.reason).toBe("timeout");
+    expect(Date.now() - started).toBeLessThan(3000);
+  });
+
   it("AC-7 stdout vượt giới hạn -> bad_output", async () => {
     const f = await failure(setup("huge", { maxStdoutBytes: 1024 * 1024 }, { FAKE_GH_HUGE_BYTES: String(3 * 1024 * 1024) }).config);
     expect(f.reason).toBe("bad_output");

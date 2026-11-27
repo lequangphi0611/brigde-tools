@@ -111,8 +111,15 @@ function spawnGh(config: GhCliConfig, stdin: string): Promise<Finished> {
     let settled = false;
     const timer = setTimeout(() => {
       timedOut = true;
-      child.kill("SIGKILL");
+      abort(new GitHubFailure("timeout"));
     }, config.timeoutMs);
+    // Kill + đóng pipe rồi reject ngay, không đợi 'close': process con của gh có thể giữ pipe (Windows) nên 'close' không bao giờ phát.
+    const abort = (f: GitHubFailure) => {
+      child.kill("SIGKILL");
+      child.stdout.destroy();
+      child.stderr.destroy();
+      fail(f);
+    };
     const fail = (f: GitHubFailure) => {
       if (settled) return;
       settled = true;
@@ -124,7 +131,7 @@ function spawnGh(config: GhCliConfig, stdin: string): Promise<Finished> {
       size += b.length;
       if (size > config.maxStdoutBytes) {
         overflow = true;
-        child.kill("SIGKILL");
+        abort(new GitHubFailure("bad_output", "stdout_too_large"));
       } else out.push(b);
     });
     child.stderr.setEncoding("utf8");

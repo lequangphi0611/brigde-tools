@@ -3,7 +3,7 @@
 // Cấu hình bằng biến môi trường (adapter thật kế thừa process.env nên đi xuống được):
 //   FAKE_GH_FIXTURE  đường dẫn file JSON kiểu GitHubFixture (test-harness/github-fixture.ts)
 //   FAKE_GH_MODE     ok (mặc định) · partial (như ok; id không có trong fixture luôn trả null + errors + exit 1)
-//                    · auth · scope · scope-partial (data null + errors INSUFFICIENT_SCOPES, exit 1) · project-null · not-resolved · unsupported · network · hang · fail
+//                    · auth · scope · scope-partial (data null + errors INSUFFICIENT_SCOPES, exit 1) · project-null · not-resolved · unsupported · network · hang · hang-grandchild · fail
 //                    · garbage · bad-shape · huge (FAKE_GH_HUGE_BYTES, mặc định 33 MiB)
 //   FAKE_GH_RECORD   file JSONL: mỗi lần gọi một dòng { argv, stdin, operationName, env }
 // Nhận diện query qua `operationName` trong body stdin: ScanProject · IssueDetails · IssueComments.
@@ -65,6 +65,13 @@ async function main() {
       const chunk = "x".repeat(1024 * 1024);
       const n = Number(process.env.FAKE_GH_HUGE_BYTES ?? 33 * 1024 * 1024) / chunk.length;
       for (let i = 0; i < n; i++) process.stdout.write(chunk);
+      return;
+    }
+    case "hang-grandchild": {
+      // Process con giữ pipe stdout/stderr (kế thừa) và sống lâu hơn gh: kill gh không làm 'close' phát ra.
+      const { spawn } = await import("node:child_process");
+      spawn(process.execPath, ["-e", "setTimeout(() => {}, 8000)"], { stdio: "inherit", detached: true }).unref();
+      setInterval(() => {}, 1000);
       return;
     }
     case "hang":
