@@ -17,6 +17,22 @@ describe("classifyGhFailure", () => {
     expect(classifyGhFailure(text)).toBe(reason);
   });
 
+  it.each([
+    "dial tcp 10.0.0.1:443: connection refused",
+    "Post https://x/api/graphql: net/http: TLS handshake timeout",
+    "read tcp: connection reset by peer",
+    "getaddrinfo ENOTFOUND host",
+    "i/o timeout",
+  ])("mẫu lỗi mạng cụ thể %s -> network", (text) => {
+    expect(classifyGhFailure(text)).toBe("network");
+  });
+
+  it("chữ connect/timeout/proxy trần không phải lỗi mạng", () => {
+    expect(classifyGhFailure("failed to connect the widget")).toBeNull();
+    expect(classifyGhFailure("timeout")).toBeNull();
+    expect(classifyGhFailure('{"data":{"title":"connect timeout in proxy docs"}}')).toBeNull();
+  });
+
   it("projectV2 không tồn tại thắng 'Could not resolve'", () => {
     expect(classifyGhFailure("Could not resolve to an Organization; Field 'projectV2' doesn't exist")).toBe("projects_v2_unsupported");
   });
