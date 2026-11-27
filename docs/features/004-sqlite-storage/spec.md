@@ -152,7 +152,7 @@ Scenario: AC-12 Chế độ fake dùng SQLite trong bộ nhớ và reset sạch 
   Then get("notification.pausedUntil") = null, bảng setting vẫn tồn tại, schemaVersion không đổi
   And hai lần buildDeps("fake") cho hai DB độc lập
 
-Scenario: AC-13 Chỉ tắt ExperimentalWarning của SQLite (có điều kiện: chỉ giữ nếu Node mục tiêu ≥ 24.15 còn phát cảnh báo này)
+Scenario: AC-13 [BỎ 2026-11-27: Node 24.15.0 không phát cảnh báo, xem Workflow log] Chỉ tắt ExperimentalWarning của SQLite (có điều kiện: chỉ giữ nếu Node mục tiêu ≥ 24.15 còn phát cảnh báo này)
   Given một process Node con nạp module storage, mở DB ":memory:", rồi tự phát process.emitWarning("x", "ExperimentalWarning")
   Then stderr không chứa "SQLite is an experimental feature"
   And stderr vẫn chứa cảnh báo ExperimentalWarning "x"
@@ -244,4 +244,4 @@ Không có.
 | GATE 1 duyệt | 2026-11-27 | User duyệt: dừng khi DB hỏng (009 hiển thị), fake `:memory:` (ADR-0008 Accepted), giữ `setting`, nhánh thật vẫn `throw`, cắt thử lại lỗi tạm thời, AC-13 có điều kiện, giữ `diagnose`, giữ tên `gh-issue-translator`. Trạng thái → approved |
 | 2 Design | 2026-11-27 | Bỏ qua: không có UI |
 | 3 Khoá e2e | 2026-11-27 | Bỏ qua: không có e2e (xem lý do dưới bảng truy vết AC) |
-| 4 Implement | 2026-11-27 | Bắt đầu lượt 1 (bước 1–5) |
+| 4 Implement | 2026-11-27 | Lượt 1 xong bước 1–5 (spike, resolveDataDir, StorageError/openDatabase/transaction, migration runner, 0001-setting + SettingStore); còn bước 6–9. **Kiểm ExperimentalWarning (bước 1):** thực nghiệm trên Node v24.15.0 (`npx -y node@24.15 -e 'require("node:sqlite"); new DatabaseSync(":memory:")'`): stderr rỗng, không có cảnh báo SQLite; đối chứng `process.emitWarning("x","ExperimentalWarning")` trên cùng binary vẫn in được. Node 22.23 vẫn in cảnh báo. Mức chắc chắn: cao (đo trực tiếp). Quyết định: **bỏ AC-13, không viết bộ lọc** (Node mục tiêu ≥ 24.15); cảnh báo trên Node 22 chỉ là nhiễu log dev/test. **Nạp module:** import tĩnh `node:sqlite` chạy được dưới Vitest 3.2 và tsx; `@types/node` 22.20 có `DatabaseSync`, `isTransaction`, `errcode`/`errstr`, không cần nâng. |
