@@ -20,8 +20,18 @@ Nguồn: `pnpm diagnose` chạy trên máy công ty, người dùng gõ lại k�
 
 `filter miss` OK 0/N, nhưng trước khi chạy chưa có comment thử nào → chưa chứng minh được. Người dùng sẽ comment thử vào một issue (không đụng board) rồi chạy lại.
 
-## Lần 3 (vẫn cần chạy)
+## Lần 3 (2026-11-27)
 
-Lần chạy 2026-11-27 thiếu `--owner`/`--number` nên `project SKIP`.
+| Dòng | Kết quả |
+|---|---|
+| `updated:` | OK, base 286 = gt 23 + lt 263 + eq 0; future = 0 |
+| `filter basis` | Filter trả 23 item: item.updatedAt sau mốc 23/23, Issue.updatedAt sau mốc 19/23 |
+| `filter miss` | OK, 0/19 issue cập nhật sau mốc bị filter bỏ sót |
+| `issue>item` | **2/286 item có Issue.updatedAt mới hơn item.updatedAt** |
+| `updated time` | Không có trong output gửi lại |
 
-Bản `diagnose` mới thêm `filter miss` (lấy toàn bộ item, so với kết quả filter), `issue>item`, và đo `updated time` với mốc lấy từ dữ liệu thật.
+**Kết luận:**
+- Trong cửa sổ đo, filter không bỏ sót issue nào.
+- Nhưng `issue>item` 2/286 là bằng chứng trực tiếp rằng có thay đổi ở Issue **không** làm `item.updatedAt` đổi. Nếu thay đổi kiểu đó xảy ra sau mốc, filter `updated:` sẽ bỏ sót. Chưa biết đó là loại thay đổi gì (comment, label, sửa body…).
+- → Filter `updated:` **không được là nguồn duy nhất** của poller. Poller phải so `Issue.updatedAt` phía client trên toàn bộ item (GHES tắt rate limit, 286 item ≈ 3 trang/chu kỳ), filter chỉ dùng được để thu hẹp nếu sau này cần.
+- Chưa rõ: lần này người dùng đã comment thử trước khi chạy hay chưa.
