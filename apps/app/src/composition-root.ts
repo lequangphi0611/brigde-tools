@@ -1,3 +1,4 @@
+import path from "node:path";
 import {
   CachingTranslator,
   ClaudeCliTranslator,
@@ -78,4 +79,33 @@ export function buildRealTranslator(options: RealTranslatorOptions): Translator 
     engineVersion: () => claudeCliEngineVersion(configPath),
     ...(observer ? { observer } : {}),
   });
+}
+
+export interface RealTranslationRuntimeOptions {
+  /** Thư mục dữ liệu app (đã resolve); DB nằm ở `<dataDir>/app.db`. */
+  dataDir: string;
+  configPath: string;
+  observer?: CachingObserver;
+  wrapInner?: (inner: Translator) => Translator;
+}
+
+export interface RealTranslationRuntime {
+  translator: Translator;
+  /** Người gọi đóng khi xong. */
+  storage: Database;
+}
+
+/**
+ * Storage thật + translator thật cho CLI (`translate-issue`), cùng đồng hồ hệ thống.
+ * Lỗi mở DB ném `StorageError`; lỗi sau khi đã mở thì DB được đóng trước khi ném lại.
+ */
+export function openRealTranslationRuntime(options: RealTranslationRuntimeOptions): RealTranslationRuntime {
+  const { dataDir, ...rest } = options;
+  const storage = openAppStorage({ path: path.join(dataDir, "app.db") });
+  try {
+    return { storage, translator: buildRealTranslator({ ...rest, storage, clock: systemClock }) };
+  } catch (e) {
+    storage.close();
+    throw e;
+  }
 }

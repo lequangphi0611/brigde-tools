@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { fileURLToPath } from "node:url";
 import type { Translator } from "@app/core-translate";
-import { buildDeps, buildRealTranslator } from "./composition-root.ts";
+import { buildDeps, buildRealTranslator, openRealTranslationRuntime } from "./composition-root.ts";
 import { systemClock } from "./shared/ports/clock.port.ts";
 import { openAppStorage } from "./shared/infrastructure/sqlite/app-storage.ts";
 import { createApp } from "./server/app.ts";
@@ -120,6 +120,30 @@ describe("buildRealTranslator (003b)", () => {
     } finally {
       storage.close();
     }
+  });
+
+  it("openRealTranslationRuntime mở <dataDir>/app.db thật và cache vào đó", async () => {
+    const { configPath, calls } = setup();
+    const runtime = openRealTranslationRuntime({ dataDir: dir, configPath });
+    try {
+      await runtime.translator.translate(request);
+      await runtime.translator.translate(request);
+      expect(calls()).toBe(1);
+    } finally {
+      runtime.storage.close();
+    }
+    const reopened = openAppStorage({ path: path.join(dir, "app.db") });
+    try {
+      expect((reopened.raw.prepare("SELECT count(*) n FROM translation").get() as { n: number }).n).toBe(2);
+    } finally {
+      reopened.close();
+    }
+  });
+
+  it("openRealTranslationRuntime: dataDir không mở được → StorageError", () => {
+    const file = path.join(dir, "la-file");
+    writeFileSync(file, "x");
+    expect(() => openRealTranslationRuntime({ dataDir: file, configPath: "x.json" })).toThrow(expect.objectContaining({ name: "StorageError" }));
   });
 
   it("cấu hình thiếu → not_configured, báo qua observer.cacheFailed(engineVersion)", async () => {

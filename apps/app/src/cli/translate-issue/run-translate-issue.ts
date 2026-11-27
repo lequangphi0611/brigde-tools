@@ -4,12 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CLI_CONFIG_FIELDS, hasTranslatableText, protect, TranslationFailure, type CachingObserver, type TranslationRequest, type Translator } from "@app/core-translate";
-import { buildRealTranslator, type RealTranslatorOptions } from "../../composition-root.ts";
+import { openRealTranslationRuntime, type RealTranslationRuntime } from "../../composition-root.ts";
 import { dataDirSource, resolveDataDir } from "../../shared/infrastructure/data-dir.ts";
-import { openAppStorage } from "../../shared/infrastructure/sqlite/app-storage.ts";
-import type { Database } from "../../shared/infrastructure/sqlite/open-database.ts";
 import { StorageError } from "../../shared/infrastructure/sqlite/storage-error.ts";
-import { systemClock } from "../../shared/ports/clock.port.ts";
 import { countJapaneseChars, decodeInputBytes, parseIssueJson } from "./issue-input.ts";
 import { formatStatusLine, type StatusFields } from "./status-line.ts";
 
@@ -38,7 +35,6 @@ export interface RunTranslateIssueOptions {
   tmpdir?: string;
   stdout: Sink;
   stderr: Sink;
-  buildTranslator?: (options: RealTranslatorOptions) => Translator;
 }
 
 type Parsed = { help: true } | { file: string; config?: string; out?: string } | { usage: true };
@@ -92,7 +88,6 @@ export async function runTranslateIssue(options: RunTranslateIssueOptions): Prom
   const platform = options.platform ?? process.platform;
   const homedir = options.homedir ?? os.homedir();
   const tmpdir = options.tmpdir ?? os.tmpdir();
-  const build = options.buildTranslator ?? buildRealTranslator;
   const fields: StatusFields = {};
 
   const finish = (exit: number, outcome: "OK" | "FAIL", code?: string): number => {
@@ -152,14 +147,8 @@ export async function runTranslateIssue(options: RunTranslateIssueOptions): Prom
     return fail(2, "data_dir_invalid", { data: dataDirSource(env, platform) });
   }
   fields.data = dataDirSource(env, platform);
-  let storage: Database | undefined;
-  try {
-    storage = openAppStorage({ path: path.join(dataDir, "app.db") });
-  } catch (e) {
-    return failFromError(e);
-  }
 
-  // 3–5. Dịch, in kết quả.
+  // 3. Đếm cache/engine qua observer và wrapInner; không đổi hành vi dịch.
   let engineCalls = 0;
   let cacheWarn: string | undefined;
   const observer: CachingObserver = {
@@ -179,19 +168,27 @@ export async function runTranslateIssue(options: RunTranslateIssueOptions): Prom
     fields.tmpLeft = countTmpLeft(tmpdir);
   };
 
+  // 4. Mở storage + lắp translator thật — composition-root quyết định adapter.
+  let runtime: RealTranslationRuntime;
   try {
-    const translator = build({
+    runtime = openRealTranslationRuntime({
+      dataDir,
       configPath,
-      storage,
-      clock: systemClock,
       observer,
-      wrapInner: (inner) => ({
+      wrapInner: (inner): Translator => ({
         translate: (r) => {
           engineCalls++;
           return inner.translate(r);
         },
       }),
     });
+  } catch (e) {
+    return failFromError(e);
+  }
+  const { translator, storage } = runtime;
+
+  // 5. Dịch, in kết quả.
+  try {
     const t0 = performance.now();
     let result;
     try {
