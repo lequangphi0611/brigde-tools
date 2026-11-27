@@ -255,10 +255,19 @@ export function diagnoseDataDir(env, platform, homedir) {
   return { dir: join(homedir, ".local", "share", name), source: "fallback" };
 }
 
+const SQLITE_NAMES = {
+  1: "ERROR", 2: "INTERNAL", 3: "PERM", 4: "ABORT", 5: "BUSY", 6: "LOCKED", 7: "NOMEM", 8: "READONLY", 9: "INTERRUPT",
+  10: "IOERR", 11: "CORRUPT", 12: "NOTFOUND", 13: "FULL", 14: "CANTOPEN", 15: "PROTOCOL", 16: "EMPTY", 17: "SCHEMA",
+  18: "TOOBIG", 19: "CONSTRAINT", 20: "MISMATCH", 21: "MISUSE", 22: "NOLFS", 23: "AUTH", 24: "FORMAT", 25: "RANGE", 26: "NOTADB",
+};
+
 /** Mã lỗi an toàn để in (EPERM, SQLITE_CANTOPEN…); không bao giờ in message vì có thể chứa đường dẫn. */
 export function fsErrorCode(e) {
+  if (typeof e?.errcode === "number") {
+    const primary = e.errcode & 0xff;
+    return `SQLITE_${SQLITE_NAMES[primary] ?? primary}`;
+  }
   if (typeof e?.code === "string" && e.code !== "ERR_SQLITE_ERROR") return e.code;
-  if (typeof e?.errstr === "string") return `SQLITE_${e.errstr.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`.slice(0, 40);
   return e?.name ?? "lỗi lạ";
 }
 

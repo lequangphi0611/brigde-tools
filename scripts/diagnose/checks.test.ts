@@ -145,11 +145,19 @@ describe("diagnose: chọn claude và phân tích filter", () => {
   it("fsErrorCode / describeStepFailure không lộ đường dẫn", () => {
     const e = Object.assign(new Error("EPERM: C:\\Users\\bob\\x"), { code: "EPERM" });
     expect(c.fsErrorCode(e)).toBe("EPERM");
-    expect(c.fsErrorCode(Object.assign(new Error("m"), { code: "ERR_SQLITE_ERROR", errstr: "unable to open database file" }))).toMatch(/^SQLITE_/);
+    expect(c.fsErrorCode(Object.assign(new Error("m"), { code: "ERR_SQLITE_ERROR", errcode: 14, errstr: "unable to open database file" }))).toBe("SQLITE_CANTOPEN");
     const f = c.describeStepFailure("tạo thư mục", e);
     expect(f).toEqual({ level: "FAIL", detail: 'bước "tạo thư mục": EPERM' });
     expect(f.detail).not.toMatch(/bob/);
     expect(c.describeStepFailure("dọn file tạm", e).level).toBe("WARN");
+  });
+
+  it("N5: fsErrorCode đặt tên SQLite theo errcode & 0xff", () => {
+    const named: Array<[number, string]> = [[5, "SQLITE_BUSY"], [6, "SQLITE_LOCKED"], [10, "SQLITE_IOERR"], [11, "SQLITE_CORRUPT"], [14, "SQLITE_CANTOPEN"], [26, "SQLITE_NOTADB"], [3338, "SQLITE_IOERR"], [2067, "SQLITE_CONSTRAINT"]];
+    for (const [errcode, name] of named) {
+      expect(c.fsErrorCode(Object.assign(new Error("m"), { code: "ERR_SQLITE_ERROR", errcode, errstr: "unable to open database file" }))).toBe(name);
+    }
+    expect(c.fsErrorCode(Object.assign(new Error("m"), { code: "ERR_SQLITE_ERROR", errcode: 999 & 0xff | 0x7f00 }))).toMatch(/^SQLITE_\d+$/);
   });
 
   it("localAppDataState", () => {
