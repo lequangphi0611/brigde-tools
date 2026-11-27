@@ -235,4 +235,40 @@ export function schedulerDeadlineMs(timeoutSeconds) {
   return (60 + t + 120) * 1000;
 }
 
-export const SCHED_DONE = "done          INFO  hết lượt chạy";
+export const SCHED_DONE = "done             INFO  hết lượt chạy";
+
+// ---------- 004: kiểm WAL trên file trong dataDir ----------
+/** Phản chiếu resolveDataDir (apps/app/src/shared/infrastructure/data-dir.ts), thêm `source` để in mà không lộ đường dẫn. */
+export function diagnoseDataDir(env, platform, homedir) {
+  const isAbs = (p) => /^([A-Za-z]:[\\/]|\\\\|\/)/.test(p);
+  const join = (base, ...parts) => [base.replace(/[\\/]+$/, ""), ...parts].join(platform === "win32" ? "\\" : "/");
+  const name = "gh-issue-translator";
+  if (env.APP_DATA_DIR) {
+    if (!isAbs(env.APP_DATA_DIR)) return { error: "APP_DATA_DIR không phải đường dẫn tuyệt đối", source: "APP_DATA_DIR" };
+    return { dir: env.APP_DATA_DIR, source: "APP_DATA_DIR" };
+  }
+  if (platform === "win32") {
+    if (env.LOCALAPPDATA) return { dir: join(env.LOCALAPPDATA, name), source: "LOCALAPPDATA" };
+    return { dir: join(homedir, "AppData", "Local", name), source: "fallback" };
+  }
+  if (env.XDG_DATA_HOME) return { dir: join(env.XDG_DATA_HOME, name), source: "XDG_DATA_HOME" };
+  return { dir: join(homedir, ".local", "share", name), source: "fallback" };
+}
+
+/** Mã lỗi an toàn để in (EPERM, SQLITE_CANTOPEN…); không bao giờ in message vì có thể chứa đường dẫn. */
+export function fsErrorCode(e) {
+  if (typeof e?.code === "string" && e.code !== "ERR_SQLITE_ERROR") return e.code;
+  if (typeof e?.errstr === "string") return `SQLITE_${e.errstr.toUpperCase().replace(/[^A-Z0-9]+/g, "_")}`.slice(0, 40);
+  return e?.name ?? "lỗi lạ";
+}
+
+/** Dòng kết quả cho từng bước thất bại: FAIL (hoặc WARN với bước dọn dẹp) kèm tên bước và mã lỗi. */
+export function describeStepFailure(step, e) {
+  const level = step === "dọn file tạm" ? "WARN" : "FAIL";
+  return { level, detail: `bước "${step}": ${fsErrorCode(e)}` };
+}
+
+/** Trạng thái LOCALAPPDATA cho dòng [sched] (không in giá trị). */
+export function localAppDataState(env) {
+  return env.LOCALAPPDATA ? "set" : "unset";
+}

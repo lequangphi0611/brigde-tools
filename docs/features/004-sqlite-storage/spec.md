@@ -179,7 +179,6 @@ Scenario: AC-14 diagnose kiểm WAL trên file trong thư mục dữ liệu
 | AC-10 | unit | `apps/app/src/shared/infrastructure/data-dir.test.ts` |
 | AC-11 | integration (`:memory:`) | `apps/app/src/shared/infrastructure/sqlite/open-database.test.ts` |
 | AC-12 | integration (Hono `app.request`, không Playwright) | `apps/app/src/composition-root.test.ts` |
-| AC-13 | integration (process con), **có điều kiện** (bước 1) | `apps/app/src/shared/infrastructure/sqlite/sqlite-warning.test.ts` |
 | AC-14 | unit cho phần thuần trong `checks.mjs` + chạy tay trên máy thật | `scripts/diagnose/checks.test.ts` |
 
 **Không có e2e mới cho 004 → bước 3 của workflow (`e2e-writer` + `pnpm e2e:lock`) được bỏ qua.** `e2e/specs/` và `e2e/specs.lock.json` không đổi. Lý do:

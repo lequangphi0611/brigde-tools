@@ -9,8 +9,8 @@
 //   node scripts/diagnose/index.mjs --owner <org> --number <n> [--owner-type user] [--scheduler] [--toast] [--raw]
 
 import { spawn, spawnSync } from "node:child_process";
-import { appendFileSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { release, tmpdir } from "node:os";
+import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { homedir, release, tmpdir } from "node:os";
 import { dirname, extname, join, resolve } from "node:path";
 import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
@@ -18,7 +18,7 @@ import { parseArgs } from "node:util";
 import {
   CLAUDE_SCHEMA, CLAUDE_SYSTEM_PROMPT, claudeFixedArgs, findForbiddenFlag, classifyClaudeFailure, classifyGhError, compareNodes,
   evaluateCounts, evaluateTranslation, hasProjectScope, isoDay, isoSecond, parseClaudeEnvelope, sampleStdin,
-  analyzeFilter, chooseClaude, countAfter, pickTimeProbe, describeTaskResult, schedulerDeadlineMs, SCHED_DONE,
+  analyzeFilter, chooseClaude, diagnoseDataDir, describeStepFailure, localAppDataState, countAfter, pickTimeProbe, describeTaskResult, schedulerDeadlineMs, SCHED_DONE,
 } from "./checks.mjs";
 
 const SCRIPT = fileURLToPath(import.meta.url);
@@ -47,7 +47,7 @@ const lines = [];
 let failures = 0;
 function say(key, status, detail = "") {
   if (status === "FAIL") failures++;
-  const l = `${key.padEnd(14)}${status.padEnd(6)}${detail}`.trimEnd();
+  const l = `${key.padEnd(17)}${status.padEnd(6)}${detail}`.trimEnd();
   lines.push(l);
   console.log(l);
   // Lượt chạy từ Task Scheduler: ghi từng dòng ngay → crash/quá hạn vẫn thấy đã tới bước nào.
@@ -109,6 +109,54 @@ function checkSqlite() {
   } finally {
     setImmediate(() => process.off("warning", onWarn));
   }
+}
+
+// 004: WAL trên FILE thật trong dataDir (":memory:" luôn trả journal_mode=memory). Không mở app.db thật.
+function checkSqliteFile() {
+  const loc = diagnoseDataDir(process.env, process.platform, homedir());
+  if (loc.error) return say("node:sqlite file", "FAIL", `bước "xác định thư mục": ${loc.error}`);
+  const tag = `nguồn ${loc.source}`;
+  const fail = (step, e) => {
+    const f = describeStepFailure(step, e);
+    say("node:sqlite file", f.level, `${f.detail} (${tag})`);
+  };
+  let step = "tạo thư mục";
+  let file;
+  let db;
+  let ok = false;
+  try {
+    mkdirSync(loc.dir, { recursive: true });
+    file = join(loc.dir, `diagnose-${process.pid}-${Date.now()}.db`);
+    step = "mở file DB";
+    const { DatabaseSync } = process.getBuiltinModule("node:sqlite");
+    db = new DatabaseSync(file);
+    step = "bật WAL";
+    const mode = db.prepare("PRAGMA journal_mode = WAL").get()?.journal_mode;
+    if (mode !== "wal") throw Object.assign(new Error("journal_mode"), { code: `JOURNAL_${String(mode).toUpperCase()}` });
+    step = "ghi/đọc";
+    const text = "tiếng Việt 日本語";
+    db.exec("CREATE TABLE t(v TEXT)");
+    db.prepare("INSERT INTO t VALUES (?)").run(text);
+    if (db.prepare("SELECT v FROM t").get()?.v !== text) throw Object.assign(new Error("roundtrip"), { code: "ROUNDTRIP_MISMATCH" });
+    step = "đóng";
+    db.close();
+    db = undefined;
+    ok = true;
+  } catch (e) {
+    fail(step, e);
+  }
+  try {
+    db?.close();
+  } catch {}
+  if (file) {
+    try {
+      for (const suffix of ["", "-wal", "-shm"]) rmSync(file + suffix, { force: true });
+    } catch (e) {
+      ok = false;
+      fail("dọn file tạm", e);
+    }
+  }
+  if (ok) say("node:sqlite file", "OK", `WAL ghi/đọc/xoá được trong thư mục dữ liệu (${tag})`);
 }
 
 // ---------- GitHub (GHES qua GH_HOST) ----------
@@ -496,11 +544,13 @@ async function main() {
   if (opt["only-claude"]) {
     say("ctx", "INFO", "Task Scheduler");
     const p = runSync(WIN ? "where.exe" : "which", ["claude"]);
+    say("LOCALAPPDATA", "INFO", localAppDataState(process.env));
     say("PATH claude", "INFO", firstLine(p.out) ? "có" : "không (dùng đường dẫn tuyệt đối trong config)");
     await checkClaude();
     if (opt.toast) await checkToast("[M0] Toast từ Task Scheduler");
   } else {
     console.log(`gh-issue-translator diagnose — ${new Date().toISOString().slice(0, 10)}\n`);
+    checkSqliteFile();
     if (checkEnv() && checkGitHub()) checkProject();
     if (!opt["skip-claude"]) await checkClaude();
     if (opt.scheduler) await checkScheduler();

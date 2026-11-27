@@ -16,10 +16,12 @@ Mục tiêu: Claude implement được mà **không cần** GitHub thật, `clau
 
 | Endpoint | Tác dụng |
 |---|---|
-| `POST /__test__/reset` | Xoá state |
+| `POST /__test__/reset` | Xoá state: issue giả, toast, đồng hồ, và mọi hàng của mọi bảng SQLite (giữ schema và `user_version`) |
 | `POST /__test__/github/issues` | Nạp issue giả |
 | `POST /__test__/clock` | Đặt giờ hiện tại |
 | `GET /__test__/toasts` | Toast đã bắn |
+
+Chế độ fake dùng **SQLite thật** ở `:memory:` (ADR-0008, `openAppStorage`) thay vì repository fake: schema và migration chạy như thật, không tạo file nào trong `dataDir`; mỗi lần `buildDeps("fake")` là một DB độc lập.
 
 Spec dùng fixture `harness` trong `e2e/support/harness.ts`, không gọi `/__test__` trực tiếp. Thêm năng lực điều khiển mới → thêm vào cả `routes.ts` và `Harness`.
 

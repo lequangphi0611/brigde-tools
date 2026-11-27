@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fixedArgs } from "../../packages/core-translate/src/infrastructure/claude-cli/claude-cli-runner.ts";
 import { checkCliConfig, FORBIDDEN_CLI_FLAGS } from "../../packages/core-translate/src/infrastructure/claude-cli/cli-config.ts";
+import { resolveDataDir } from "../../apps/app/src/shared/infrastructure/data-dir.ts";
 // @ts-expect-error — module .mjs không có khai báo kiểu
 import * as c from "./checks.mjs";
 
@@ -102,5 +103,40 @@ describe("diagnose: chọn claude và phân tích filter", () => {
     const probe = c.pickTimeProbe(nodes, 2);
     expect(probe).toBe("2026-11-26T08:59:59Z");
     expect(c.countAfter(nodes, probe)).toBe(2);
+  });
+
+  it("diagnoseDataDir giữ đồng bộ với resolveDataDir (004)", () => {
+    const cases: Array<[Record<string, string>, string, string]> = [
+      [{ APP_DATA_DIR: "/srv/d" }, "linux", "/home/u"],
+      [{ APP_DATA_DIR: "D:\\gh" }, "win32", "C:\\Users\\u"],
+      [{ LOCALAPPDATA: "C:\\Users\\u\\AppData\\Local" }, "win32", "C:\\Users\\u"],
+      [{}, "win32", "C:\\Users\\u"],
+      [{ XDG_DATA_HOME: "/x" }, "linux", "/home/u"],
+      [{}, "linux", "/home/u"],
+    ];
+    for (const [env, platform, home] of cases) {
+      expect(c.diagnoseDataDir(env, platform, home).dir).toBe(resolveDataDir(env, platform, home));
+    }
+  });
+
+  it("diagnoseDataDir ghi nguồn, không nhận đường dẫn tương đối", () => {
+    expect(c.diagnoseDataDir({ LOCALAPPDATA: "C:\\x" }, "win32", "h").source).toBe("LOCALAPPDATA");
+    expect(c.diagnoseDataDir({}, "win32", "h").source).toBe("fallback");
+    expect(c.diagnoseDataDir({ APP_DATA_DIR: "rel" }, "linux", "h").error).toBeTypeOf("string");
+  });
+
+  it("fsErrorCode / describeStepFailure không lộ đường dẫn", () => {
+    const e = Object.assign(new Error("EPERM: C:\\Users\\bob\\x"), { code: "EPERM" });
+    expect(c.fsErrorCode(e)).toBe("EPERM");
+    expect(c.fsErrorCode(Object.assign(new Error("m"), { code: "ERR_SQLITE_ERROR", errstr: "unable to open database file" }))).toMatch(/^SQLITE_/);
+    const f = c.describeStepFailure("tạo thư mục", e);
+    expect(f).toEqual({ level: "FAIL", detail: 'bước "tạo thư mục": EPERM' });
+    expect(f.detail).not.toMatch(/bob/);
+    expect(c.describeStepFailure("dọn file tạm", e).level).toBe("WARN");
+  });
+
+  it("localAppDataState", () => {
+    expect(c.localAppDataState({ LOCALAPPDATA: "x" })).toBe("set");
+    expect(c.localAppDataState({})).toBe("unset");
   });
 });
