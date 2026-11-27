@@ -7,6 +7,7 @@
   },
   "scripts": {
     "dev": "pnpm --filter @app/app dev",
+    "start": "pnpm --filter @app/app start",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
