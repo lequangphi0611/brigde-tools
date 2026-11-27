@@ -28,7 +28,7 @@
 | `ProjectResumed` | Listen lại project | Notification (summary toast) |
 
 ## Ports
-- `GitHubGateway` (story 005a, ADR-0010 Proposed; thay `fetchUpdatedIssues(project, since)`):
+- `GitHubGateway` (story 005a, ADR-0010 Proposed; đã thay `fetchUpdatedIssues(project, since)`; `GitHubIssueSnapshot` có thêm `comments`, `DETAIL_BATCH = 25`, comment hơn 100 được phân trang):
   - `scanProject(project, { statusField }): ProjectScan` — phân trang **toàn bộ** item của board (≈3 trang với ~286 item), mỗi Issue lấy `nodeId`, `Issue.updatedAt`, `Issue.state` và giá trị field Status của item (`fieldValueByName`, single select → `{ name, optionId }`, không có → `null`) (`ProjectIssueStamp`); `ProjectScan.statusField` = `found`/`missing`/`not_single_select`/`not_requested`; PR, draft issue, item không có quyền chỉ đếm (`skipped`). Adapter không áp quy tắc close.
   - `fetchIssueDetails(nodeIds): IssueDetails` — chi tiết theo lô (title, body, repo, number, url, assignees, **mọi** comment sắp theo `createdAt`); id không còn đọc được vào `missing`, không làm hỏng cả lô.
   - Lỗi: `GitHubFailure { reason }` (`gh_not_found` / `not_authenticated` / `scope_missing` / `project_not_found` / `projects_v2_unsupported` / `network` / `timeout` / `process_failed` / `bad_output`), không chứa owner/hostname/nội dung.

@@ -114,3 +114,36 @@ translate-issue OK enc=utf8 jaChars=120 srcChars=200 segments=2 hits=0 misses=2 
 Lỗi: `FAIL <mã>`. Exit 2 là đầu vào sai (`usage`, `input_not_found`, `input_unreadable`, `input_encoding`, `input_not_json`, `input_bad_shape`, `data_dir_invalid`); exit 1 là `storage:<lý do>`, `translate:<lý do>` (kèm `detail=`), `output_write`, `internal`. `translate:not_configured` nghĩa là `--config` thiếu hoặc sai; xem `detail=` và `field=`: `config_missing` (không có file), `config_not_json`, `config_invalid field=<key>` (key sai kiểu hoặc ngoài khoảng, vd `timeoutSeconds` 10–1800, `concurrency` 1–4, `maxInputChars` 100–200000), `forbidden_flag field=args` (cờ cấm trong `args`), `command_cmd_bat field=command` (Windows không nhận `.cmd`/`.bat`). Dòng `claude cfg FAIL` của `diagnose` cũng nêu trường và khoảng hợp lệ. Stderr có thể có `ExperimentalWarning` của SQLite trên Node < 24.15, không chứa dữ liệu.
 
 Ghi kết quả hai lần chạy (`ms`, `tmpLeft`, `enc`, `jaChars`) vào `docs/spikes/claude-cli-windows.md` mục "Lần 5".
+
+## Kiểm adapter GitHub (005a)
+
+Kiểm `GhCliGateway` (quét board Projects v2 + chi tiết issue kèm comment qua `gh`) trên máy thật, chạy sau `pnpm diagnose`. Cần `pnpm install`, `GH_HOST` đã đặt (không đặt: `FAIL gh_host_unset`, exit 2). Chỉ đọc: không ghi DB, không gọi Claude.
+
+```
+pnpm -s github-check --owner <org|user> --number <n> [--owner-type user] [--status-field <tên, mặc định Status>] [--days <1-30, mặc định 7>] [--max-details <1-200, mặc định 50>]
+```
+
+Chạy bằng `pnpm -s` từ thư mục repo (như `translate-issue`). **Chỉ gõ lại dòng cuối** (`github-check OK …` hoặc `github-check FAIL …`): chỉ có mã và số đếm; owner, hostname, tên field/giá trị Status, tên repo, nội dung không bao giờ được in. `--raw` in thêm stderr gốc của `gh` ra stderr để tự đọc (có thể có hostname/owner), không gõ lại.
+
+```
+github-check OK host=GH_HOST items=286 issues=278 skipped=pr:5,draft:3,noaccess:0 closed=40 statusField=found statusSet=270 statusOptions=5 pages=3 scanMs=4100 recent=23 details=23 missing=0 detailCalls=1 comments=140 maxComments=31 commentPages=0 jaChars=51234 newerComment=0 editedComment=2 detailMs=2900
+```
+
+| Trường | Ý nghĩa |
+|---|---|
+| `host` | Luôn là chữ `GH_HOST` (có đặt), không in giá trị |
+| `items`, `issues`, `skipped` | Số item trên board; số Issue; số PR / draft / không có quyền |
+| `closed` | Số Issue có `state = CLOSED` |
+| `statusField`, `statusSet`, `statusOptions` | `found` / `missing` / `not_single_select`; số Issue có giá trị Status; số giá trị Status khác nhau đang dùng |
+| `pages`, `scanMs` | Số trang và thời gian quét (chi phí mỗi chu kỳ của 005b) |
+| `recent`, `details`, `missing` | Issue đổi trong `--days`; số lấy chi tiết được (tối đa `--max-details`, mới nhất trước); số id không còn |
+| `detailCalls`, `commentPages` | Số lần gọi `gh` lấy chi tiết (lô 25); số lần gọi thêm để phân trang comment |
+| `comments`, `maxComments` | Tổng comment / nhiều nhất trên một issue |
+| `jaChars` | Số ký tự kana/kanji trong title+body+comment. **0 với project tiếng Nhật = hỏng encoding giữa `gh` và Node** |
+| `newerComment` | Số issue có comment `createdAt` > `Issue.updatedAt`. Khác 0 = comment mới không đẩy mốc, 005b sẽ bỏ sót comment |
+| `editedComment` | Số issue có comment `updatedAt` > `Issue.updatedAt` (gồm cả comment mới, vì `updatedAt` ≥ `createdAt`) |
+| `detailMs` | Thời gian lấy chi tiết |
+
+Lỗi: `github-check FAIL <mã>`. Exit 2 = đầu vào sai (`usage`, `gh_host_unset`); exit 1 = `github:<reason>` (`gh_not_found`, `not_authenticated`, `scope_missing`, `project_not_found`, `projects_v2_unsupported`, `network`, `timeout`, `process_failed`, `bad_output`) hoặc `internal`.
+
+Ghi kết quả vào `docs/spikes/projects-v2-polling.md` (Lần 5).
