@@ -1,6 +1,6 @@
 # 003b — Script dịch title + body của một issue thật (`translate-issue`)
 
-- Trạng thái: approved
+- Trạng thái: done
 - Context: Translation (dùng `ClaudeCliTranslator` + `CachingTranslator` của `core-translate`; `SqliteTranslationCache` + `dataDir` của app). Lệnh vận hành, không có UI web.
 - Cần UI: không
 
@@ -243,3 +243,4 @@ Không có.
 | 4 Implement, lượt 1 | 2026-11-27 | Xong bước 1–3 (issue-input, status-line + dataDirSource, buildRealTranslator trong composition-root); unit xanh, typecheck xanh. Còn bước 4–6 |
 | 4 Implement, lượt 2 | 2026-11-27 | Xong bước 4–6: `run-translate-issue.ts` (+ test trong process), `main.ts`, script `translate-issue` ở root (thêm `tsx` vào devDependencies của root để giữ `INIT_CWD`), test spawn mức process, docs (diagnose.md, CLAUDE.md). Lệch spec: AC-9 `garbage` không cho `detail=invalid_schema` (xem báo cáo) |
 | Review vòng 1 | 2026-11-27 | APPROVE. Sửa: AC-9 theo hành vi thật của fake CLI; ghi cách chạy bằng root script; docs dùng `pnpm -s`, phải đứng trong repo; `main` bọc `runTranslateIssueSafely` (FAIL internal); đồng bộ range `tsx` ^4.23.15; bỏ `!` ở `output_write` |
+| 5 Verify + 7 PR | 2026-11-27 | Orchestrator chạy `pnpm verify` xanh (340 unit, e2e lock OK, smoke 1/1). Để lại 2 nit: test AC-14/AC-5 mỏng, `segments` lặp logic chọn đoạn của core. Trạng thái done. Tiêu chí M1 còn chờ chạy trên máy thật |
