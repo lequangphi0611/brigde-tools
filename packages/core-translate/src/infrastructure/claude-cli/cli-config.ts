@@ -54,3 +54,21 @@ export async function loadCliConfig(path: string): Promise<CliConfigResult> {
     return { ok: false, problem: "Tệp cấu hình Claude CLI không phải JSON hợp lệ" };
   }
 }
+
+/**
+ * Giá trị cờ `--model` trong `args` (spec 003): nhận `--model <giá trị>` và `--model=<giá trị>`, tên cờ không phân biệt hoa thường,
+ * nhiều lần thì lấy lần cuối, giá trị được trim. Không có hoặc thiếu giá trị → "".
+ */
+export function extractConfiguredModel(args: ReadonlyArray<string>): string {
+  let model = "";
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (a.toLowerCase() === "--model") {
+      model = (args[i + 1] ?? "").trim();
+      i++;
+    } else if (a.slice(0, 8).toLowerCase() === "--model=") {
+      model = a.slice(8).trim();
+    }
+  }
+  return model;
+}

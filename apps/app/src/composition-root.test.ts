@@ -46,3 +46,17 @@ describe("composition root fake (AC-12)", () => {
     expect(b.settings.get("notification.pausedUntil")).toBeNull();
   });
 });
+
+describe("composition root fake: cache bản dịch (003 AC-16)", () => {
+  it("translator có cache SQLite: dịch hai lần cùng kết quả, bảng translation có 1 hàng", async () => {
+    const deps = buildDeps("fake");
+    const request = { direction: { from: "ja", to: "vi" }, segments: [{ id: "a", text: "ログイン" }], context: { glossary: [] } } as const;
+    const first = await deps.translator.translate(request);
+    expect(first.segments).toEqual([{ id: "a", text: "[vi] ログイン" }]);
+    expect(first.model).toBe("fake");
+    const second = await deps.translator.translate(request);
+    expect(second.segments).toEqual(first.segments);
+    expect(second.model).toBeNull();
+    expect((deps.storage.raw.prepare("SELECT count(*) n FROM translation").get() as { n: number }).n).toBe(1);
+  });
+});

@@ -16,7 +16,13 @@ Khi story đưa thêm khái niệm, `analyst` thêm vào đây TRƯỚC khi impl
 | Quy tắc thông báo | `NotifyRules` | Notification | `newIssue`, `assignedOrMentioned`, `newComment` — theo project |
 | Toast | `Toast` | Notification | Thông báo Windows; bấm mở `localhost` đúng issue |
 | Toast tóm tắt | `SummaryToast` | Notification | Một toast "N mục mới" khi listen lại project |
-| Bản dịch | `Translation` | Translation | Kết quả dịch, khoá = `hash(text) + direction` |
+| Bản dịch | `Translation` | Translation | Bản dịch đã lưu của **một đoạn**, khoá = `TranslationCacheKey`; thuộc tính `text`, `model`, `createdAt`; không lưu text nguồn (story 003) |
+| Cache bản dịch | `TranslationCache` | Translation | Port tra/ghi `Translation` theo khoá (`lookup`/`store`); port trong `core-translate`, adapter SQLite ở app (bảng `translation`) |
+| Khoá cache | `TranslationCacheKey` | Translation | `sourceHash` (sha256 text gốc của đoạn) + `direction` + `glossaryVersion` (thuật ngữ liên quan của đoạn) + `promptVersion` + `configuredModel`. Không gồm `hint`, model thực tế |
+| Phiên bản mẫu dịch | `promptVersion` | Translation | Chuỗi do bên lắp đặt truyền vào cache (vd `CLAUDE_CLI_PROMPT_VERSION = "claude-cli/p1"`); tăng tay khi đổi system prompt, định dạng stdin hay luật che phần giữ nguyên |
+| Model đã cấu hình | `configuredModel` | Translation | Giá trị cờ `--model` trong `args` của cấu hình Claude CLI (lần cuối thắng), không khai báo thì `""`. Khác `model` (model thực tế đọc từ output sau khi gọi) |
+| Phiên bản engine | `EngineVersion` | Translation | `{ promptVersion, configuredModel }` mà `CachingTranslator` lấy mỗi lần dịch qua hàm do composition root truyền vào (`claudeCliEngineVersion(configPath)` cho adapter thật) |
+| Translator có cache | `CachingTranslator` | Translation | Decorator của `Translator`: chỉ gửi các đoạn chưa có trong cache, ghi kết quả; lỗi cache không làm hỏng việc dịch |
 | Chiều dịch | `Direction` | Translation | `{ from, to }`; MVP chỉ `ja→vi` |
 | Đoạn dịch | `TranslationSegment` | Translation | Một chuỗi cần dịch trong một yêu cầu, `{ id, text }`; `id` mờ do bên gọi đặt (app map `Content` → đoạn) |
 | Yêu cầu dịch | `TranslationRequest` | Translation | Lô đoạn dịch + `Direction` + ngữ cảnh, đi trong **một** lần gọi engine (cả issue một lần) |
@@ -28,7 +34,7 @@ Khi story đưa thêm khái niệm, `analyst` thêm vào đây TRƯỚC khi impl
 | Khoá thuật ngữ | `termKey` | Translation | `ja` sau NFKC, gộp khoảng trắng, trim, viết thường. Hai thuật ngữ trùng ⇔ cùng khoá (ADR-0007) |
 | Glossary đã gộp | `Glossary` | Translation | Kết quả `mergeGlossary(common, project)`: danh sách `{ ja, vi }` đã chuẩn hoá, khoá duy nhất, sắp theo khoá. Là `TranslationContext.glossary` |
 | Thuật ngữ liên quan | `relevantTerms` | Translation | Thuật ngữ có phía nguồn xuất hiện (sau chuẩn hoá) trong text đã che của các đoạn; chỉ những thuật ngữ này vào prompt |
-| Phiên bản glossary | `glossaryVersion` | Translation | `"g1-"` + 16 hex đầu sha256 của danh sách thuật ngữ đã chuẩn hoá; rỗng = `GLOSSARY_VERSION_EMPTY`. Đổi glossary → bản dịch cũ có thể dịch lại. Tính trên cả glossary hay trên thuật ngữ liên quan của từng đoạn: story 003 chốt |
+| Phiên bản glossary | `glossaryVersion` | Translation | `"g1-"` + 16 hex đầu sha256 của danh sách thuật ngữ đã chuẩn hoá; rỗng = `GLOSSARY_VERSION_EMPTY`. Đổi glossary → bản dịch cũ có thể dịch lại. Khoá cache dùng version của thuật ngữ liên quan tới **từng đoạn** (002 Câu hỏi 3, story 003) |
 | Job dịch | `TranslationJob` | Translation | Mục trong hàng đợi: priority, status, attempts |
 | Dịch ngay | `translateNow` | Translation | Người dùng yêu cầu dịch issue chưa có bản dịch |
 | Dịch bù | `backfill` | Tracking→Translation | Dịch phần bỏ lỡ khi listen lại |
