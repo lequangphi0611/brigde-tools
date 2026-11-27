@@ -55,6 +55,8 @@ Thiết kế phòng thủ vì không debug được trên máy thật: chỗ nà
 
 **Xong khi:** script của 003b dịch được title + body của một issue thật trên Windows, chạy lần hai thì lấy từ cache (dòng trạng thái báo không gọi engine).
 
+✅ **Đạt 2026-11-27** (`docs/spikes/claude-cli-windows.md` Lần 5). Cần đo thêm thời gian theo độ dài issue trước 006.
+
 ---
 
 ## M2 — Walking skeleton: một project → toast → đọc
