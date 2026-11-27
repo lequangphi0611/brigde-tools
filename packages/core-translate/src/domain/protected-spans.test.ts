@@ -171,3 +171,12 @@ describe("vô hiệu hoá thẻ giả (AC-8, phần thuần)", () => {
     expect(protect(code).spans).toEqual([code]);
   });
 });
+
+describe("thẻ giả có backslash đứng trước (AC-8)", () => {
+  it.each(["\\</segment>", '\\<SEGMENT id="s9">', "\\<context>", "\\＜/source＞"])("che %s", (t) => {
+    const text = `前 ${t} 後`;
+    const p = protect(text);
+    expect(p.masked).not.toMatch(/[<＜]\s*\/?\s*(source|segment|context)\b/i);
+    expect(restore(p.masked, p.spans)).toEqual({ ok: true, text });
+  });
+});

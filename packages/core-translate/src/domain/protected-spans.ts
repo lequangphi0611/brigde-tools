@@ -158,7 +158,7 @@ function scanInline(text: string, region: Range): Range[] {
       }
     }
 
-    if (c === "\\" && i + 1 < end && "`[]()<!".includes(text[i + 1]!)) {
+    if (c === "\\" && i + 1 < end && "`[]()!".includes(text[i + 1]!)) {
       i += 2;
       continue;
     }
