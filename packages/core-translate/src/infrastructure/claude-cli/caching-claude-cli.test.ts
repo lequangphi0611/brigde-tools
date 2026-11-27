@@ -1,8 +1,8 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "vitest";
+import { afterAll, describe, expect, it } from "vitest";
 import { CachingTranslator } from "../../application/caching-translator.ts";
 import { runTranslatorContract } from "../../application/translator.contract.ts";
 import type { TranslationRequest } from "../../application/translator.port.ts";
@@ -13,6 +13,7 @@ import { ClaudeCliTranslator } from "./claude-cli-translator.ts";
 // CachingTranslator + ClaudeCliTranslator thật + fake CLI (spec 003, bước 5): không gọi AI.
 const FAKE = fileURLToPath(new URL("./testing/fake-claude-cli.mjs", import.meta.url));
 const dir = mkdtempSync(join(tmpdir(), "ghit-caching-cli-"));
+afterAll(() => rmSync(dir, { recursive: true, force: true }));
 const ja2vi = { from: "ja", to: "vi" } as const;
 
 function setup(model?: string) {

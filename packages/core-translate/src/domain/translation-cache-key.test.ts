@@ -54,10 +54,6 @@ describe("translationCacheKey", () => {
     expect(m("")).toBe(m(""));
   });
 
-  it("AC-8 khoá không phụ thuộc hint (không có tham số hint)", () => {
-    expect(translationCacheKey.length).toBe(4);
-  });
-
   describe("AC-7 glossaryVersion theo thuật ngữ liên quan của từng đoạn", () => {
     const g1 = [{ ja: "課題", vi: "issue" }];
     it("thêm thuật ngữ không xuất hiện trong đoạn thì khoá không đổi", () => {

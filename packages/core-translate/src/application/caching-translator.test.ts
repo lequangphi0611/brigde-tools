@@ -90,16 +90,17 @@ describe("CachingTranslator", () => {
   });
 
   it("AC-3 đoạn không có chữ cần dịch không tra và không ghi; không còn gì thì không gọi engineVersion/inner", async () => {
-    const looked: number[] = [];
-    const stored: number[] = [];
+    const looked: string[][] = [];
+    const stored: string[][] = [];
     const spy: TranslationCache = {
-      lookup: async (keys) => { looked.push(keys.length); return new Map(); },
-      store: async (entries) => { stored.push(entries.length); },
+      lookup: async (keys) => { looked.push(keys.map(cacheKeyString)); return new Map(); },
+      store: async (entries) => { stored.push(entries.map((e) => cacheKeyString(e.key))); },
     };
+    const titleKey = cacheKeyString(translationCacheKey("課題", ja2vi, [], ENGINE));
     const { inner, translator, engineCalls } = setup({ cache: spy });
     const r = await translator.translate(req([["body", ""], ["c1", "```\nlog\n```"], ["c2", "  \n"], ["title", "課題"]]));
-    expect(looked).toEqual([1]);
-    expect(stored).toEqual([1]);
+    expect(looked).toEqual([[titleKey]]);
+    expect(stored).toEqual([[titleKey]]);
     expect(inner.calls[0]!.segments.map((s) => s.id)).toEqual(["title"]);
     expect(r.segments).toEqual([
       { id: "body", text: "" },
@@ -115,7 +116,7 @@ describe("CachingTranslator", () => {
     expect(r2.segments).toHaveLength(3);
     expect(s2.engineCalls.n).toBe(0);
     expect(s2.inner.calls).toHaveLength(0);
-    expect(looked).toEqual([1]);
+    expect(looked).toEqual([[titleKey]]);
   });
 
   it("AC-4 text khác, \\r\\n, hoặc promptVersion khác thì trượt", async () => {
@@ -187,6 +188,16 @@ describe("CachingTranslator", () => {
       { id: "comment:B", text: "[vi] 了解です" },
       { id: "title", text: "[vi] 課題" },
     ]);
+  });
+
+  it("inner bỏ sót id thì ném Error thường và không ghi cache", async () => {
+    const dropping: Translator = { translate: async () => ({ segments: [{ id: "a", text: "x" }], model: "m" }) };
+    const cache = new InMemoryTranslationCache();
+    const translator = new CachingTranslator({ inner: dropping, cache, engineVersion: () => ENGINE });
+    const p = translator.translate(req([["a", "一つ目"], ["b", "二つ目"]]));
+    await expect(p).rejects.toThrow(Error);
+    await expect(p).rejects.not.toBeInstanceOf(TranslationFailure);
+    expect(cache.size).toBe(0);
   });
 
   it("AC-10 inner lỗi thì ném nguyên đối tượng, không ghi gì, lần sau gửi lại phần trượt", async () => {

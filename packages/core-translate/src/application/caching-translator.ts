@@ -81,13 +81,13 @@ export class CachingTranslator implements Translator {
       const result = await inner.translate({ direction: request.direction, segments: misses, context: request.context });
       model = result.model;
       translated = new Map(result.segments.map((s) => [s.id, s.text]));
+      // Inner bỏ sót id là vi phạm hợp đồng Translator: lỗi lập trình, không ghi cache.
+      const missing = misses.find((m) => !translated.has(m.id));
+      if (missing) throw new Error(`Translator bên trong không trả đoạn có id: ${missing.id}`);
       // 8. Ghi cache; lỗi ghi không làm hỏng kết quả.
       try {
         await cache.store(
-          misses.flatMap((m) => {
-            const text = translated.get(m.id);
-            return text === undefined ? [] : [{ key: keyOf.get(m.id)!.key, value: { text, model } }];
-          }),
+          misses.map((m) => ({ key: keyOf.get(m.id)!.key, value: { text: translated.get(m.id)!, model } })),
         );
       } catch (error) {
         this.notifyFailed("store", error);
@@ -100,7 +100,7 @@ export class CachingTranslator implements Translator {
       if (!entry) return { id: s.id, text: s.text };
       const cached = found.get(entry.keyString);
       if (cached) return { id: s.id, text: cached.text };
-      return { id: s.id, text: translated.get(representative.get(entry.keyString)!) ?? s.text };
+      return { id: s.id, text: translated.get(representative.get(entry.keyString)!)! };
     });
     return { segments, model };
   }
