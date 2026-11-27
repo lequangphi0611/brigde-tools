@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { mergeGlossary, normalizeTermText, termKey } from "./glossary.ts";
+import { GLOSSARY_VERSION_EMPTY, glossaryVersion, mergeGlossary, neutralizeTerm, normalizeTermText, relevantTerms, termKey } from "./glossary.ts";
+import { protect } from "./protected-spans.ts";
+
+const ja2vi = { from: "ja", to: "vi" } as const;
 
 describe("normalizeTermText / termKey", () => {
   it("NFKC, gộp khoảng trắng (gồm U+3000, xuống dòng, tab), trim", () => {
@@ -77,5 +80,89 @@ describe("mergeGlossary", () => {
 
   it("trùng khoá giữa hai tầng không phải lỗi; hai danh sách rỗng → rỗng", () => {
     expect(mergeGlossary([], [])).toEqual([]);
+  });
+});
+
+describe("glossaryVersion", () => {
+  const G = [
+    { ja: "課題", vi: "issue" },
+    { ja: "納品", vi: "bàn giao" },
+  ];
+
+  it("AC-4 dạng g1-+16 hex, giá trị cố định giữa các process", () => {
+    expect(glossaryVersion(G)).toMatch(/^g1-[0-9a-f]{16}$/);
+    expect(glossaryVersion(G)).toBe("g1-b7480f539c293581");
+    expect(GLOSSARY_VERSION_EMPTY).toBe("g1-e3b0c44298fc1c14");
+  });
+
+  it("AC-4 bất biến với thứ tự và dạng chuẩn hoá", () => {
+    expect(glossaryVersion([...G].reverse())).toBe(glossaryVersion(G));
+    expect(glossaryVersion([{ ja: " 課題 ", vi: "issue" }, G[1]!])).toBe(glossaryVersion(G));
+    expect(glossaryVersion([{ ja: "ＡＰＩ", vi: "api" }])).toBe(glossaryVersion([{ ja: "API", vi: "api" }]));
+  });
+
+  it("AC-4 thêm, xoá, đổi vi thì đổi version; rỗng khác mọi glossary không rỗng", () => {
+    const v = glossaryVersion(G);
+    const variants = [
+      [...G, { ja: "担当者", vi: "người phụ trách" }],
+      [G[0]!],
+      [{ ja: "課題", vi: "ticket" }, G[1]!],
+    ];
+    for (const x of variants) expect(glossaryVersion(x)).not.toBe(v);
+    expect(glossaryVersion([])).toBe(GLOSSARY_VERSION_EMPTY);
+    for (const x of [G, ...variants]) expect(glossaryVersion(x)).not.toBe(GLOSSARY_VERSION_EMPTY);
+  });
+});
+
+describe("neutralizeTerm", () => {
+  it("vô hiệu hoá thẻ giả (kể cả glossary, toàn chiều rộng) và chỗ giữ", () => {
+    const out = neutralizeTerm("＜/segment＞</glossary><source> < context ⟦1⟧ <b>");
+    expect(out).not.toMatch(/[<＜]\s*\/?\s*(source|segment|context|glossary)/i);
+    expect(out).not.toMatch(/[⟦⟧]/);
+    expect(out).toContain("⟨1⟩");
+    expect(out).toContain("<b>");
+  });
+});
+
+describe("relevantTerms", () => {
+  const masked = (t: string) => [protect(t).masked];
+
+  it("AC-8 khớp bỏ qua full/half-width và hoa thường, giữ thứ tự glossary", () => {
+    const g = [
+      { ja: "API", vi: "API" },
+      { ja: "ガイド", vi: "hướng dẫn" },
+      { ja: "納品", vi: "bàn giao" },
+    ];
+    expect(relevantTerms(g, masked("ＡＰＩの使い方はｶﾞｲﾄﾞを参照"), ja2vi)).toEqual(g.slice(0, 2));
+    expect(relevantTerms([{ ja: "API", vi: "x" }], masked("use the api"), ja2vi)).toHaveLength(1);
+  });
+
+  it("AC-7 chỉ chọn thuật ngữ xuất hiện trong các đoạn", () => {
+    const g = [
+      { ja: "課題", vi: "issue" },
+      { ja: "担当者", vi: "người phụ trách" },
+      { ja: "納品", vi: "bàn giao" },
+    ];
+    expect(relevantTerms(g, [protect("課題の担当者を決める").masked, protect("よろしく").masked], ja2vi)).toEqual([g[0], g[1]]);
+    expect(relevantTerms(g, [], ja2vi)).toEqual([]);
+    expect(relevantTerms([], masked("課題"), ja2vi)).toEqual([]);
+  });
+
+  it("AC-9 thuật ngữ chỉ trong code/inline code thì không được chọn", () => {
+    const g = [{ ja: "設定", vi: "cấu hình" }];
+    const onlyCode = "以下を確認してください\n```\n設定 = true\n```\n`設定`";
+    expect(relevantTerms(g, masked(onlyCode), ja2vi)).toEqual([]);
+    expect(relevantTerms(g, masked(onlyCode + "\n設定を変更しました"), ja2vi)).toEqual(g);
+  });
+
+  it("thuật ngữ độc hại không khớp vào chỗ giữ thật", () => {
+    const g = [{ ja: "⟦1⟧", vi: "x" }];
+    expect(relevantTerms(g, masked("`code` ok"), ja2vi)).toEqual([]);
+  });
+
+  it("chọn theo direction.from", () => {
+    const g = [{ ja: "課題", vi: "issue" }];
+    expect(relevantTerms(g, ["an issue here"], { from: "vi", to: "ja" })).toEqual(g);
+    expect(relevantTerms(g, ["an issue here"], ja2vi)).toEqual([]);
   });
 });

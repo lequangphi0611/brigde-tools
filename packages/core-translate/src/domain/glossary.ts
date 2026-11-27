@@ -1,6 +1,9 @@
 // Glossary hai tầng (spec 002, ADR-0007): logic thuần, không I/O. Tầng chung và tầng project là hai danh sách đầu vào;
 // kết quả là `Glossary` đã chuẩn hoá, khoá duy nhất, sắp theo `termKey`.
 
+import { createHash } from "node:crypto"; // chỉ tính băm thuần, không I/O
+import type { Direction } from "./language.ts";
+
 export interface GlossaryTermInput {
   readonly ja: string;
   readonly vi: string;
@@ -51,3 +54,38 @@ export function mergeGlossary(common: ReadonlyArray<GlossaryTermInput>, project:
   for (const [key, term] of normalizeLayer(project, "project")) merged.set(key, term);
   return [...merged.entries()].sort(([a], [b]) => compareCodeUnits(a, b)).map(([, term]) => term);
 }
+
+/**
+ * Vô hiệu hoá một `ja`/`vi` trước khi render vào prompt: thẻ giả `source|segment|context|glossary` (ASCII hoặc toàn chiều rộng)
+ * mất dấu mở, và ký tự chỗ giữ `⟦ ⟧` thành `⟨ ⟩` để không giả được chỗ giữ thật. Nhận chuỗi đã chuẩn hoá.
+ */
+export function neutralizeTerm(s: string): string {
+  return s
+    .replace(/[<＜](?=[\s\u200b-\u200d\ufeff]*[\/／]?[\s\u200b-\u200d\ufeff]*(?:source|segment|context|glossary)\b)/gi, "‹")
+    .replaceAll("⟦", "⟨")
+    .replaceAll("⟧", "⟩");
+}
+
+/**
+ * Thuật ngữ liên quan: dạng render của phía nguồn (sau chuẩn hoá, hạ chữ thường) là chuỗi con của text đã che của ít nhất
+ * một đoạn. So trên text đã che nên thuật ngữ chỉ nằm trong phần giữ nguyên không được chọn. Giữ thứ tự của `glossary`.
+ */
+export function relevantTerms(glossary: Glossary, maskedTexts: ReadonlyArray<string>, direction: Direction): Glossary {
+  const haystacks = maskedTexts.map((t) => normalizeTermText(t).toLowerCase());
+  return glossary.filter((term) => {
+    const needle = neutralizeTerm(normalizeTermText(term[direction.from])).toLowerCase();
+    return needle !== "" && haystacks.some((h) => h.includes(needle));
+  });
+}
+
+/** Phiên bản của một tập thuật ngữ: không đổi khi đổi thứ tự hay dạng full/half-width, đổi khi thêm/xoá/đổi `vi`. */
+export function glossaryVersion(terms: Glossary): string {
+  const canonical = terms
+    .map((t) => ({ ja: normalizeTermText(t.ja), vi: normalizeTermText(t.vi) }))
+    .sort((a, b) => compareCodeUnits(a.ja.toLowerCase(), b.ja.toLowerCase()))
+    .map((t) => `${t.ja}\u0000${t.vi}`)
+    .join("\u0001");
+  return `g1-${createHash("sha256").update(canonical, "utf8").digest("hex").slice(0, 16)}`;
+}
+
+export const GLOSSARY_VERSION_EMPTY: string = glossaryVersion([]);
