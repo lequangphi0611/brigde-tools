@@ -43,3 +43,40 @@ node scripts/diagnose/index.mjs --owner <org> --number <n> --scheduler --toast  
 | `node:sqlite FAIL` | Không dùng được SQLite có sẵn trong Node → xem lại ADR-0004 (better-sqlite3) |
 | `sched toast FAIL` | Toast gửi từ process nền không hiện → xem lại ADR-0005 |
 | `toast click FAIL` | Cần cách toast khác, đưa vào ADR-0005 |
+
+## Dịch thử một issue (003b)
+
+Kiểm lõi dịch M1 (`claude -p` + cache SQLite) trên một issue thật mà không cần poller. Khác `diagnose`, lệnh này cần `pnpm install` (dùng `tsx` và `node:sqlite`, Node ≥ 22.13).
+
+1. Xuất issue ra file bằng **`cmd /c`** (giữ nguyên byte; `>` của PowerShell 5.1 có thể làm hỏng tiếng Nhật thành `?` trước khi vào file):
+   ```
+   cmd /c "gh issue view <số> --repo <owner/repo> --json title,body > issue.json"
+   ```
+   Ghi chú: file do `>`/`Out-File` của PowerShell (UTF-8 có BOM, UTF-16LE) vẫn đọc được, nhưng nếu tiếng Nhật đã hỏng thì script không cứu được.
+2. Chạy (ở thư mục có `issue.json`, đường dẫn tương đối tính theo thư mục đang đứng):
+   ```
+   pnpm translate-issue issue.json
+   pnpm translate-issue issue.json --config <path> --out vi.txt
+   ```
+   `--config` mặc định `config/claude-cli.local.json` (cùng file `diagnose` dùng). `--out` ghi bản dịch ra file UTF-8 có BOM, khi đó màn hình chỉ có dòng trạng thái. Chạy lại lần hai để thấy cache.
+3. Dòng cuối là **dòng trạng thái**, chỉ gồm mã, số đếm và thời gian. **Chỉ gõ lại dòng này** cho Claude; đừng gửi bản dịch hay đường dẫn.
+
+```
+translate-issue OK enc=utf8 jaChars=120 srcChars=200 segments=2 hits=0 misses=2 engine=called ms=8000 cache=ok data=LOCALAPPDATA tmpLeft=0
+```
+
+| Trường | Ý nghĩa |
+|---|---|
+| `enc` | Encoding của file: `utf8`, `utf8-bom`, `utf16le-bom` |
+| `jaChars` | Số ký tự kana/kanji. **0 với issue tiếng Nhật = file đã hỏng encoding**, xuất lại bằng `cmd /c` |
+| `srcChars`, `segments` | Độ dài và số đoạn có chữ cần dịch (title, body) |
+| `hits` / `misses` | Số đoạn trúng / trượt cache. Lần hai phải là `hits=2 misses=0 engine=skipped` |
+| `engine` | `called` nếu có gọi `claude -p`, `skipped` nếu cache đủ |
+| `ms` | Thời gian dịch (không gồm mở DB) |
+| `cache` | `ok` hoặc `warn:<engineVersion\|lookup\|store>[/sqlite=<mã>]` (cache lỗi nhưng vẫn dịch) |
+| `data` | Nguồn của `dataDir` (không in đường dẫn) |
+| `tmpLeft` | Số thư mục `ghit-ai-*` còn trong thư mục tạm (theo dõi EPERM, chỉ đếm) |
+
+Lỗi: `FAIL <mã>`. Exit 2 là đầu vào sai (`usage`, `input_not_found`, `input_unreadable`, `input_encoding`, `input_not_json`, `input_bad_shape`, `data_dir_invalid`); exit 1 là `storage:<lý do>`, `translate:<lý do>` (kèm `detail=`), `output_write`, `internal`. `translate:not_configured` nghĩa là `--config` thiếu hoặc sai. Stderr có thể có `ExperimentalWarning` của SQLite trên Node < 24.15, không chứa dữ liệu.
+
+Ghi kết quả hai lần chạy (`ms`, `tmpLeft`, `enc`, `jaChars`) vào `docs/spikes/claude-cli-windows.md` mục "Lần 5".
