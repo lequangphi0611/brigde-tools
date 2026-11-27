@@ -8,6 +8,16 @@ export type {
 } from "./application/translator.port.ts";
 export { TranslationFailure, type TranslationFailureReason } from "./application/translation-failure.ts";
 export { protect, restore, hasTranslatableText, type ProtectedText, type RestoreResult } from "./domain/protected-spans.ts";
+export {
+  mergeGlossary,
+  relevantTerms,
+  termKey,
+  normalizeTermText,
+  glossaryVersion,
+  GLOSSARY_VERSION_EMPTY,
+  type Glossary,
+  type GlossaryTermInput,
+} from "./domain/glossary.ts";
 export { FakeTranslator } from "./infrastructure/fake-translator.ts";
 export { ClaudeCliTranslator } from "./infrastructure/claude-cli/claude-cli-translator.ts";
 export { checkCliConfig, loadCliConfig, type CliConfig, type CliConfigResult } from "./infrastructure/claude-cli/cli-config.ts";

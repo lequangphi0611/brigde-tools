@@ -1,3 +1,4 @@
+import { assertValidGlossary } from "../domain/glossary.ts";
 import type { TranslationRequest } from "./translator.port.ts";
 
 /** Request sai là lỗi lập trình của bên gọi: ném Error thường (không phải TranslationFailure). */
@@ -8,4 +9,5 @@ export function assertValidTranslationRequest(request: TranslationRequest): void
     if (seen.has(s.id)) throw new Error(`TranslationSegment.id bị trùng: ${s.id}`);
     seen.add(s.id);
   }
+  assertValidGlossary(request.context.glossary);
 }
