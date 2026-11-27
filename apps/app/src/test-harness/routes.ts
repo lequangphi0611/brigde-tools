@@ -1,16 +1,19 @@
 import { Hono } from "hono";
+import type { Database } from "../shared/infrastructure/sqlite/open-database.ts";
+import { clearAllTables } from "./clear-storage.ts";
 import type { FakeGitHub, RecordingNotifier, ControllableClock } from "./fakes.ts";
 
 /**
  * API điều khiển CHỈ dành cho e2e. Chỉ được mount khi APP_ADAPTERS=fake (xem main.ts).
  * E2E dùng nó để: nạp dữ liệu GitHub giả, chỉnh đồng hồ, đọc toast đã bắn, reset state.
  */
-export function testHarnessRoutes(deps: { github: FakeGitHub; notifier: RecordingNotifier; clock: ControllableClock }) {
+export function testHarnessRoutes(deps: { storage: Database; github: FakeGitHub; notifier: RecordingNotifier; clock: ControllableClock }) {
   const r = new Hono();
   r.post("/reset", (c) => {
     deps.github.issues = [];
     deps.notifier.sent.length = 0;
     deps.clock.reset();
+    clearAllTables(deps.storage);
     return c.json({ ok: true });
   });
   r.post("/github/issues", async (c) => {
