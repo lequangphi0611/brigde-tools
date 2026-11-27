@@ -1,10 +1,14 @@
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fileURLToPath } from "node:url";
 import type { Translator } from "@app/core-translate";
-import { buildDeps, buildRealTranslator, openRealTranslationRuntime } from "./composition-root.ts";
+import { buildDeps, buildRealTranslator, openRealTranslationRuntime, type Deps } from "./composition-root.ts";
+import { startup } from "./startup.ts";
+import { GhCliGateway } from "./contexts/tracking/infrastructure/gh-cli/gh-cli-gateway.ts";
+import { setupFakeGh } from "./contexts/tracking/infrastructure/gh-cli/testing/fake-gh-setup.ts";
+import type { GitHubFixture } from "./test-harness/github-fixture.ts";
 import { systemClock } from "./shared/ports/clock.port.ts";
 import { openAppStorage } from "./shared/infrastructure/sqlite/app-storage.ts";
 import { createApp } from "./server/app.ts";
@@ -161,5 +165,80 @@ describe("buildRealTranslator (003b)", () => {
     } finally {
       storage.close();
     }
+  });
+});
+
+describe("composition root nhánh thật (005c AC-3, AC-5)", () => {
+  const project = { owner: "fake", ownerType: "org", number: 1 } as const;
+  const iss = (nodeId: string, n: number) => ({
+    nodeId, repo: "o/r", number: n, url: `https://x/${nodeId}`, title: `t${n}`, body: `b${n}`, assignees: [], updatedAt: "2026-11-03T00:00:00Z", comments: [],
+  });
+  const fixture: GitHubFixture = {
+    project,
+    statusField: { name: "Status", kind: "single_select", options: [{ name: "Done", optionId: "o1" }] },
+    items: [1, 2, 3].map((n) => ({ kind: "issue" as const, issue: iss(`I_${n}`, n) })),
+  };
+  const GH_ENV = { GH_HOST: "ghes.example.test" };
+
+  function boot(mode: string, env?: Record<string, string>) {
+    writeFileSync(path.join(dir, "config.json"), JSON.stringify({ project: { owner: "fake", number: 1 }, pollIntervalMin: 7, claudeCliConfig: path.join(dir, "no-such.json") }));
+    const started = startup({ env: { ...GH_ENV, APP_DATA_DIR: dir }, platform: process.platform, homedir: "/unused" });
+    if (!started.ok) throw new Error(started.lines.join("\n"));
+    const fake = setupFakeGh(fixture, mode, {}, { ...GH_ENV, ...env });
+    const lines: string[] = [];
+    const delays: number[] = [];
+    const deps = buildDeps("real", {
+      config: started.config,
+      storage: started.storage,
+      log: (l) => lines.push(l),
+      gh: fake.config,
+      schedule: (_fn, ms) => (delays.push(ms), () => {}),
+    });
+    return { deps, lines, delays, fake };
+  }
+  const cycle = async (deps: Deps, lines: string[]) => {
+    const { formatPollLine } = await import("./contexts/tracking/application/poll-line.ts");
+    const line = formatPollLine(await deps.pollCycle!.run());
+    lines.push(line);
+    return line;
+  };
+
+  it("AC-3: DB ở <dataDir>/app.db, schema 3, GhCliGateway, BASELINE rồi OK new=0 sau khi dựng lại", async () => {
+    const a = boot("ok");
+    expect(a.deps.storage.schemaVersion()).toBe(3);
+    expect(readdirSync(dir)).toContain("app.db");
+    expect(a.deps.github).toBeInstanceOf(GhCliGateway);
+    expect(a.deps.harness).toBeUndefined();
+    expect(await cycle(a.deps, a.lines)).toMatch(/^\[poll\] BASELINE issues=3 /);
+    a.deps.storage.close();
+
+    const b = boot("ok");
+    const line = await cycle(b.deps, b.lines);
+    expect(line).toMatch(/^\[poll\] OK /);
+    expect(line).toContain("new=0");
+    b.deps.storage.close();
+  });
+
+  it("AC-3: scheduler dùng pollIntervalMin của cấu hình và chạy chu kỳ đầu qua log", async () => {
+    const a = boot("ok");
+    a.deps.scheduler!.start();
+    await vi.waitFor(() => expect(a.delays).toEqual([7 * 60_000]));
+    expect(a.lines[0]).toMatch(/^\[poll\] BASELINE issues=3 /);
+    a.deps.scheduler!.stop();
+    a.deps.storage.close();
+  });
+
+  it("AC-5: gh chưa đăng nhập không chặn khởi động; chuyển sang ok thì BASELINE", async () => {
+    const a = boot("auth");
+    const first = await cycle(a.deps, a.lines);
+    expect(first).toMatch(/^\[poll\] FAIL github:not_authenticated ms=\d+/);
+    expect(a.deps.storage.raw.prepare("SELECT count(*) n FROM tracked_project").get()).toEqual({ n: 0 });
+    (a.fake.config.env as Record<string, string>)["FAKE_GH_MODE"] = "ok";
+    expect(await cycle(a.deps, a.lines)).toMatch(/^\[poll\] BASELINE /);
+    a.deps.storage.close();
+  });
+
+  it("thiếu RealWiring thì ném", () => {
+    expect(() => buildDeps(undefined)).toThrow();
   });
 });

@@ -21,6 +21,10 @@ import { SqliteUnitOfWork } from "./shared/infrastructure/sqlite/sqlite-unit-of-
 import { PollCycle, type PollProjectConfig } from "./contexts/tracking/application/poll-cycle.ts";
 import { SqliteTrackingRepository } from "./contexts/tracking/infrastructure/sqlite-tracking-repository.ts";
 import { ControllableClock, FakeGitHub, RecordingNotifier } from "./test-harness/fakes.ts";
+import { toPollProjectConfig, type AppConfig } from "./shared/infrastructure/app-config.ts";
+import { GhCliGateway } from "./contexts/tracking/infrastructure/gh-cli/gh-cli-gateway.ts";
+import type { GhCliConfig } from "./contexts/tracking/infrastructure/gh-cli/gh-cli-runner.ts";
+import { PollScheduler } from "./contexts/tracking/application/poll-scheduler.ts";
 
 export interface Deps {
   translator: Translator;
@@ -31,14 +35,36 @@ export interface Deps {
   /** Handle SQLite dùng chung; đóng khi tắt app. */
   storage: Database;
   /** Chỉ có khi chạy fake — để mount test-harness routes. */
+  /** Chỉ có ở nhánh thật: người gọi (main.ts) `start()` sau khi server lên và `stop()` khi tắt. */
+  scheduler?: PollScheduler;
+  /** Chỉ có ở nhánh thật; test chạy trực tiếp một chu kỳ mà không chờ hẹn giờ. */
+  pollCycle?: PollCycle;
   harness?: { storage: Database; github: FakeGitHub; notifier: RecordingNotifier; clock: ControllableClock; pollCycle: PollCycle };
 }
 
 /** Project cố định của chế độ fake (005b); chu kỳ chỉ chạy khi test gọi `POST /__test__/poll`. */
 export const FAKE_POLL_PROJECT: PollProjectConfig = { owner: "fake", ownerType: "org", number: 1, statusField: "Status", closedStatuses: [] };
 
-/** Nơi DUY NHẤT quyết định adapter thật hay fake. */
-export function buildDeps(mode: string | undefined): Deps {
+/** Đầu vào nhánh thật: kết quả của `startup()` (storage đã mở, cấu hình đã kiểm) + chỗ tiêm cho test. */
+export interface RealWiring {
+  config: AppConfig;
+  /** Đã mở bằng `openAppStorage(<dataDir>/app.db)`; `Deps.storage` giữ đúng handle này. */
+  storage: Database;
+  /** Mặc định `console.log`. */
+  log?: (line: string) => void;
+  /** Cấu hình `gh` (test trỏ tới fake-gh mức process). */
+  gh?: Partial<GhCliConfig>;
+  /** Hẹn giờ tiêm vào cho `PollScheduler` (test). */
+  schedule?: (fn: () => void, delayMs: number) => () => void;
+}
+
+/** Notifier không làm gì tới khi có toast thật (007). */
+class NoopNotifier implements Notifier {
+  async notify(): Promise<void> {}
+}
+
+/** Nơi DUY NHẤT quyết định adapter thật hay fake. Nhánh thật cần `real` (từ `startup()`). */
+export function buildDeps(mode: string | undefined, real?: RealWiring): Deps {
   if (mode === "fake") {
     const github = new FakeGitHub();
     const notifier = new RecordingNotifier();
@@ -68,9 +94,36 @@ export function buildDeps(mode: string | undefined): Deps {
       harness: { storage, github, notifier, clock, pollCycle },
     };
   }
-  // TODO(spike): adapter thật — ClaudeCliTranslator, GhCliGateway, WindowsToastNotifier.
-  void systemClock;
-  throw new Error("Real adapters chưa được implement. Chạy với APP_ADAPTERS=fake.");
+  if (!real) throw new Error("Nhánh adapter thật cần RealWiring (chạy startup() trước) hoặc APP_ADAPTERS=fake.");
+  const { config, storage } = real;
+  const clock = systemClock;
+  const github = new GhCliGateway(real.gh ?? {});
+  const pollCycle = new PollCycle({
+    github,
+    repository: new SqliteTrackingRepository(storage),
+    unitOfWork: new SqliteUnitOfWork(storage),
+    publisher: new InProcessEventBus(), // chưa có bên nghe (006/007 đăng ký ở đây)
+    clock,
+    project: toPollProjectConfig(config),
+    classifyStorageError: classifyStorageFailure,
+  });
+  const scheduler = new PollScheduler({
+    runCycle: () => pollCycle.run(),
+    pollIntervalMin: config.pollIntervalMin,
+    log: real.log ?? ((line) => console.log(line)),
+    ...(real.schedule ? { schedule: real.schedule } : {}),
+  });
+  return {
+    // Đã lắp nhưng chưa ai gọi tới 006.
+    translator: buildRealTranslator({ configPath: config.claudeCliConfig, storage, clock }),
+    github,
+    notifier: new NoopNotifier(),
+    clock,
+    settings: new SqliteSettingStore(storage),
+    storage,
+    scheduler,
+    pollCycle,
+  };
 }
 
 export interface RealTranslatorOptions {
