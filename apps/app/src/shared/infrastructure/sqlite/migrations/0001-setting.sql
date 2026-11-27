@@ -1,0 +1,4 @@
+CREATE TABLE setting (
+  key TEXT PRIMARY KEY NOT NULL,
+  value TEXT NOT NULL
+) STRICT;

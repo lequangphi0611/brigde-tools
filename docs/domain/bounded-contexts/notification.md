@@ -2,7 +2,7 @@
 
 ## Model
 - `NotifyRules` (VO, theo project): `newIssue`, `assignedOrMentioned`, `newComment`.
-- `GlobalPause` (VO): `pausedUntil: Date | null` — lưu bảng `setting`. Lựa chọn: 1 giờ, hết ngày, đến khi bật lại.
+- `GlobalPause` (VO): `pausedUntil: Date | null` — lưu qua port `SettingStore` (story 004), khoá `notification.pausedUntil`, giá trị ISO-8601 UTC; không có khoá = không tạm dừng. Lựa chọn: 1 giờ, hết ngày, đến khi bật lại.
 
 ## Quy tắc
 - Chỉ bắn toast khi **bản dịch đã sẵn** (nghe `TranslationReady`, không nghe event thô).

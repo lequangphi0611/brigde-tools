@@ -37,6 +37,9 @@ node scripts/diagnose/index.mjs --owner <org> --number <n> --scheduler --toast  
 | `claude cfg FAIL … chứa cờ --x` | Config có cờ mà app tự đặt hoặc cấm (cấp tool, bỏ quyền…). Xoá cờ đó khỏi `args` |
 | `scheduler FAIL task không chạy xong …` | Task con không xong trong hạn chờ (60s + `timeoutSeconds` + 120s). Các dòng `[sched]` phía trên cho biết nó dừng ở bước nào. `0x41301` = vẫn đang chạy (chậm), `0x41303` = chưa từng chạy (GPO/quyền logon), `0x80070002` = không thấy node/script, `1` = crash hoặc có FAIL |
 | `[sched] …` | Kết quả của cùng phép thử khi chạy qua Task Scheduler (khác PATH, khác môi trường) |
+| `node:sqlite file FAIL bước "…": <mã>` | Không tạo/ghi/bật WAL trong thư mục dữ liệu (`dataDir`). Mã như `EPERM`, `SQLITE_CANTOPEN`, `JOURNAL_DELETE` (ổ không hỗ trợ WAL, vd chia sẻ mạng). Dòng chỉ ghi nguồn đường dẫn (`APP_DATA_DIR`/`LOCALAPPDATA`/`fallback`), không ghi đường dẫn. Dùng `APP_DATA_DIR` để đổi chỗ. Không mở `app.db` thật |
+| `node:sqlite file WARN bước "dọn file tạm"` | Ghi/đọc được nhưng xoá `diagnose-*.db` (và `-wal`/`-shm`) không được: nghi antivirus/khoá file. Ghi lại mã lỗi để quyết định story thử lại khi khởi động |
+| `[sched] LOCALAPPDATA INFO unset` | Task Scheduler chạy không có `LOCALAPPDATA`; app dùng fallback `<homedir>\AppData\Local` (vẫn đúng chỗ) |
 | `node:sqlite FAIL` | Không dùng được SQLite có sẵn trong Node → xem lại ADR-0004 (better-sqlite3) |
 | `sched toast FAIL` | Toast gửi từ process nền không hiện → xem lại ADR-0005 |
 | `toast click FAIL` | Cần cách toast khác, đưa vào ADR-0005 |
