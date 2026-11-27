@@ -58,7 +58,7 @@ Là người dùng chạy app nền trên máy Windows công ty, tôi muốn tr�
 
 **Composition root**: `Deps` thêm `settings: SettingStore` (và handle storage để đóng khi tắt). `APP_ADAPTERS=fake` → `openAppStorage({ path: ":memory:" })`, không đụng tới `dataDir`. `harness` thêm `storage`; `POST /__test__/reset` xoá mọi hàng của mọi bảng người dùng (bảng không bắt đầu bằng `sqlite_`), giữ schema và `user_version`, tạm tắt kiểm khoá ngoại trong lúc xoá. Không thêm endpoint harness mới.
 
-**ExperimentalWarning** (có điều kiện, xem AC-13): trước khi nạp `node:sqlite` lần đầu, lọc riêng cảnh báo `ExperimentalWarning` có message chứa `SQLite`; mọi cảnh báo khác vẫn in. Cảnh báo phát ra khi **nạp module**, nên module SQLite phải được nạp sau bộ lọc (vd `process.getBuiltinModule("node:sqlite")` như `diagnose`, hoặc import động), không qua import tĩnh bị hoist lên trước.
+**ExperimentalWarning** (ĐÃ BỎ, không làm bộ lọc, xem Workflow log; phần còn lại của đoạn chỉ để tham khảo): trước khi nạp `node:sqlite` lần đầu, lọc riêng cảnh báo `ExperimentalWarning` có message chứa `SQLite`; mọi cảnh báo khác vẫn in. Cảnh báo phát ra khi **nạp module**, nên module SQLite phải được nạp sau bộ lọc (vd `process.getBuiltinModule("node:sqlite")` như `diagnose`, hoặc import động), không qua import tĩnh bị hoist lên trước.
 
 ## Acceptance criteria
 
@@ -244,3 +244,4 @@ Không có.
 | 2 Design | 2026-11-27 | Bỏ qua: không có UI |
 | 3 Khoá e2e | 2026-11-27 | Bỏ qua: không có e2e (xem lý do dưới bảng truy vết AC) |
 | 4 Implement | 2026-11-27 | Lượt 1 xong bước 1–5 (spike, resolveDataDir, StorageError/openDatabase/transaction, migration runner, 0001-setting + SettingStore); còn bước 6–9. **Kiểm ExperimentalWarning (bước 1):** thực nghiệm trên Node v24.15.0 (`npx -y node@24.15 -e 'require("node:sqlite"); new DatabaseSync(":memory:")'`): stderr rỗng, không có cảnh báo SQLite; đối chứng `process.emitWarning("x","ExperimentalWarning")` trên cùng binary vẫn in được. Node 22.23 vẫn in cảnh báo. Mức chắc chắn: cao (đo trực tiếp). Quyết định: **bỏ AC-13, không viết bộ lọc** (Node mục tiêu ≥ 24.15); cảnh báo trên Node 22 chỉ là nhiễu log dev/test. **Nạp module:** import tĩnh `node:sqlite` chạy được dưới Vitest 3.2 và tsx; `@types/node` 22.20 có `DatabaseSync`, `isTransaction`, `errcode`/`errstr`, không cần nâng. |
+| 4 Implement (lượt 2) | 2026-11-27 | Xong bước 6–9: openAppStorage, composition root + harness (`:memory:`, reset xoá mọi bảng, main bắt StorageError → stderr một dòng, exit 1), diagnose dòng `node:sqlite file` + `LOCALAPPDATA` trong [sched] (cột nhãn của `say` rộng 17), docs diagnose/testing-harness, bảng truy vết bỏ AC-13. `pnpm verify` xanh: 223 unit, e2e lock OK, 1 e2e pass. AC-14 chạy thử trên Linux (nguồn XDG_DATA_HOME/fallback) OK; chưa chạy trên Windows thật |
