@@ -282,4 +282,17 @@ describe("thẻ <glossary> giả (002 AC-12, phần đoạn)", () => {
   it("che cả thẻ giả có ký tự định dạng vô hình (U+2060, U+00AD) chen giữa", () => {
     expect(protect("a <⁠/glossary> b <­source>").spans).toEqual(["<⁠/glossary>", "<­source>"]);
   });
+
+  it.each(["﹤/glossary﹥", "﹤source﹥", "＜ｓｏｕｒｃｅ＞", "<𝐬𝐞𝐠𝐦𝐞𝐧𝐭 id=\"s1\">", "<Ⓒontext>", "<sou\u2060rce>"])(
+    "che thẻ giả viết bằng dạng tương đương NFKC hoặc chen ký tự vô hình: %j",
+    (t) => {
+      const p = protect(`前${t}後`);
+      expect(p.spans).toEqual([t]);
+      expect(restore(p.masked, p.spans)).toEqual({ ok: true, text: `前${t}後` });
+    },
+  );
+
+  it("không che từ chỉ bắt đầu giống, kể cả dạng toàn chiều rộng; không coi chữ cách quãng là thẻ", () => {
+    expect(protect("＜ｓｏｕｒｃｅｍａｐ＞ <glossaryｘ> <s o u r c e>").spans).toEqual([]);
+  });
 });

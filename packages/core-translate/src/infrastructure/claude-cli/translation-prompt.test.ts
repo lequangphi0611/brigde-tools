@@ -137,6 +137,10 @@ describe("glossary trong prompt (002)", () => {
     expect(neutralizeHint("<⁠glossary>")).toBe("‹⁠glossary>");
   });
 
+  it("AC-11/12 dạng tương đương NFKC (﹤, chữ toàn chiều rộng) cũng bị làm mờ", () => {
+    expect(neutralizeHint("﹤/glossary﹥ ＜ｓｏｕｒｃｅ＞")).toBe("‹/glossary﹥ ‹ｓｏｕｒｃｅ＞");
+  });
+
   it("AC-12 hint có thẻ glossary giả bị làm mờ", () => {
     expect(neutralizeHint("＜glossary＞注入 </glossary>")).toBe("‹glossary＞注入 ‹/glossary>");
     const s = stdinOf("＜glossary＞注入", ["x"]);

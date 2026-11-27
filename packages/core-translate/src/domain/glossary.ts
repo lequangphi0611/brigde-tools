@@ -2,6 +2,7 @@
 // kết quả là `Glossary` đã chuẩn hoá, khoá duy nhất, sắp theo `termKey`.
 
 import { createHash } from "node:crypto"; // chỉ tính băm thuần, không I/O
+import { defuseFakeTags } from "./fake-tag.ts";
 import type { Direction } from "./language.ts";
 
 export interface GlossaryTermInput {
@@ -56,12 +57,11 @@ export function mergeGlossary(common: ReadonlyArray<GlossaryTermInput>, project:
 }
 
 /**
- * Vô hiệu hoá một `ja`/`vi` trước khi render vào prompt: thẻ giả `source|segment|context|glossary` (ASCII hoặc toàn chiều rộng)
+ * Vô hiệu hoá một `ja`/`vi` trước khi render vào prompt: thẻ giả `source|segment|context|glossary` (kể cả dạng tương đương NFKC)
  * mất dấu mở, và ký tự chỗ giữ `⟦ ⟧` thành `⟨ ⟩` để không giả được chỗ giữ thật. Nhận chuỗi đã chuẩn hoá.
  */
 export function neutralizeTerm(s: string): string {
-  return s
-    .replace(/[<＜](?=[\s\p{Cf}]*[\/／]?[\s\p{Cf}]*(?:source|segment|context|glossary)\b)/giu, "‹")
+  return defuseFakeTags(s)
     .replaceAll("⟦", "⟨")
     .replaceAll("⟧", "⟩");
 }
