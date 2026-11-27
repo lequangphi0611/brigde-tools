@@ -1,6 +1,6 @@
 # 001 — Dịch cả issue ja→vi trong một lần gọi qua `ClaudeCliTranslator`
 
-- Trạng thái: approved
+- Trạng thái: done
 - Context: Translation (`packages/core-translate`)
 - Cần UI: không
 
@@ -317,3 +317,7 @@ Không còn câu hỏi mở.
 | 1 Phân tích | 2026-11-26 | Spec draft; đề xuất bỏ bước e2e; 5 câu hỏi mở |
 | 1 Phân tích (lần 2) | 2026-11-26 | User trả lời câu hỏi mở: tự chia lô tuần tự, không bỏ qua khi không có chữ Nhật, diagnose dịch theo lô (mặc định có), đổi port tự do, kiểm chỗ giữ chặt. Thêm AC-22…AC-24, sửa AC-15; 24 AC; cỡ hơi vượt M; không còn câu hỏi mở |
 | GATE 1 | 2026-11-26 | User duyệt. Diagnose dịch theo lô tách thành S0.4 (M0), làm sau. Bỏ bước 2 (không UI) và bước 3 (e2e: không có hành vi người dùng thấy được). Tiếp theo: bước 4 implement bước 1–8 |
+| 4 Implement | 2026-11-27 | 3 lượt implementer (bước 1–3, 4–6, 7–8), 8 commit `feat(translation)` |
+| 5 Verify | 2026-11-27 | Orchestrator tự chạy `pnpm verify`: xanh (104 unit, e2e lock OK, smoke 1/1) |
+| 6 Review | 2026-11-27 | CHANGES_REQUESTED: 2 must-fix (thẻ giả sau `\`, fence CRLF) đã sửa; user chọn sửa should-fix 3 (`／`, zero-width), 4 (code span qua dòng trống), 5 (URL trần dừng ở ký tự ngoài ASCII), 8 (`\\` trước backtick); để lại 6 (AC-24 bad_output ở lần gọi 2), 7 (`[x]:` giữa đoạn). Verify lại: xanh (127 unit, e2e lock OK, smoke 1/1) |
+| 7 PR | 2026-11-27 | Spec done, roadmap ✅, ADR-0006 Accepted (user đồng ý). Chờ GATE 4 |

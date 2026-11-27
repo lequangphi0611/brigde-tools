@@ -1,6 +1,6 @@
 # ADR-0006: Port `Translator` dịch theo lô đoạn, phần giữ nguyên được che bằng chỗ giữ
 
-- Trạng thái: Proposed
+- Trạng thái: Accepted
 - Ngày: 2026-11-26
 - Liên quan: ADR-0003 (runner), story 001 (`docs/features/001-claude-cli-translator/spec.md`), `docs/spikes/claude-cli-windows.md`
 
