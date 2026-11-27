@@ -32,3 +32,8 @@ Khi story đưa thêm khái niệm, `analyst` thêm vào đây TRƯỚC khi impl
 | Job dịch | `TranslationJob` | Translation | Mục trong hàng đợi: priority, status, attempts |
 | Dịch ngay | `translateNow` | Translation | Người dùng yêu cầu dịch issue chưa có bản dịch |
 | Dịch bù | `backfill` | Tracking→Translation | Dịch phần bỏ lỡ khi listen lại |
+| Cài đặt | `Setting` / `SettingStore` | Shared (hạ tầng) | Cặp khoá–giá trị chuỗi trong bảng `setting`. Khoá dạng `<context>.<tên>` (vd `notification.pausedUntil`); context tự mã hoá giá trị (story 004) |
+| Thư mục dữ liệu | `dataDir` | Shared (hạ tầng) | Nơi chứa `app.db` (và log ở 009), ngoài thư mục code: `APP_DATA_DIR`, hoặc `%LOCALAPPDATA%\gh-issue-translator` trên Windows (ADR-0008) |
+| Migration | `Migration` | Shared (hạ tầng) | File `NNNN-<tên>.sql`, một chuỗi đánh số liên tục cho toàn app; mỗi story thêm bảng thì thêm file kế tiếp, không sửa file đã merge |
+| Phiên bản schema | `schemaVersion` | Shared (hạ tầng) | `PRAGMA user_version` = số migration cuối đã commit. App từ chối chạy khi lớn hơn migration nó biết |
+| Lỗi lưu trữ | `StorageError` | Shared (hạ tầng) | `reason` = `open_failed` / `corrupt` / `invalid_migrations` / `migration_failed` / `schema_too_new`; kèm số migration và mã lỗi SQLite, không chứa dữ liệu |
