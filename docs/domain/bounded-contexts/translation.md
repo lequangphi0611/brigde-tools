@@ -11,7 +11,7 @@ Package độc lập, dùng chung với tool dịch chat Việt↔Nhật. **Khô
 
 ## Hành vi dịch
 - **Cả issue một lần gọi** (~100 giây mỗi lần gọi trên máy thật): bên gọi gửi một `TranslationRequest` gồm nhiều `TranslationSegment` (title, body, comment mới).
-- Giữ nguyên code block, inline code, URL của link/ảnh, `@mention`, email, comment HTML: che thành chỗ giữ `⟦N⟧` trước khi gửi, khôi phục nguyên văn sau khi nhận (logic thuần trong `domain/`). Chữ của link vẫn được dịch.
+- Giữ nguyên code block, inline code, URL của link/ảnh, `@mention`, email, comment HTML: che thành chỗ giữ `⟦N⟧` trước khi gửi, khôi phục nguyên văn sau khi nhận (logic thuần trong `domain/`). Chữ của link vẫn được dịch. URL trần dừng ở ký tự không phải ASCII (chữ Nhật liền URL vẫn được dịch), nên link sau dịch có thể khác cách GitHub autolink một chút (chấp nhận).
 - Prompt có glossary (từ 002) + ngữ cảnh (`hint`).
 - **Invariant của port:** kết quả có đúng tập id của request (không thiếu, thừa, trùng); mỗi chỗ giữ đã gửi xuất hiện đúng một lần trong đoạn tương ứng; sai thì `TranslationFailure("bad_output")`, không trả kết quả một phần.
 - Đoạn rỗng hoặc chỉ gồm phần giữ nguyên không được gửi; không còn gì để gửi thì không gọi engine.

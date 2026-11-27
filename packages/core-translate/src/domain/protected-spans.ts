@@ -121,7 +121,7 @@ function findFences(text: string): Range[] {
 
 const REF_DEF = /[ \t]{0,3}(\[(?!\^)[^\]\n]+\]:[ \t]*\S+(?:[ \t]+(?:"[^"\n]*"|'[^'\n]*'|\([^)\n]*\)))?)[ \t]*(?=\r?\n|$)/y;
 const AUTOLINK = /<[a-zA-Z][a-zA-Z0-9+.-]{1,31}:[^\s<>]*>/y;
-const BARE_URL = /https?:\/\/[^\s<>`　-〿＀-￯]+/y;
+const BARE_URL = /https?:\/\/[^\s<>`\u0080-￿]+/y; // dừng ở ký tự ngoài ASCII (chữ Nhật liền URL vẫn được dịch)
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/y;
 const MENTION = /@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\/[A-Za-z0-9._-]+)?/y;
 // Thẻ phân cách của prompt (source|segment|context), mở hoặc đóng, ASCII hoặc toàn chiều rộng, cho phép khoảng trắng bên trong.

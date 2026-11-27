@@ -219,3 +219,16 @@ describe("inline code không vượt dòng trống", () => {
     expect(protect("`a\nb`").spans).toEqual(["`a\nb`"]);
   });
 });
+
+describe("URL trần dừng ở ký tự không phải ASCII", () => {
+  it("chỉ che phần ASCII, chữ Nhật liền sau vẫn được dịch", () => {
+    const p = protect("https://example.jp/fooを参照してください");
+    expect(p.spans).toEqual(["https://example.jp/foo"]);
+    expect(p.masked).toBe("⟦1⟧を参照してください");
+  });
+
+  it("giữ hành vi URL ASCII (dấu câu cuối, ngoặc)", () => {
+    expect(protect("見て https://example.jp/a. 次").spans).toEqual(["https://example.jp/a"]);
+    expect(protect("(https://example.jp/a)").spans).toEqual(["https://example.jp/a"]);
+  });
+});
