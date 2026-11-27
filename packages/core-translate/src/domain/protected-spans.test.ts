@@ -232,3 +232,16 @@ describe("URL trần dừng ở ký tự không phải ASCII", () => {
     expect(protect("(https://example.jp/a)").spans).toEqual(["https://example.jp/a"]);
   });
 });
+
+describe("backslash đã bị escape", () => {
+  it("C:\\\\`code` vẫn che inline code", () => {
+    const text = "パス C:\\\\`code` です";
+    const p = protect(text);
+    expect(p.spans).toEqual(["`code`"]);
+    expect(restore(p.masked, p.spans)).toEqual({ ok: true, text });
+  });
+
+  it("\\` đơn vẫn là backtick bị escape", () => {
+    expect(protect("\\`a` b").spans).toEqual([]);
+  });
+});
