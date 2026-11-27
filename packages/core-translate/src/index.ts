@@ -28,3 +28,4 @@ export { CLAUDE_CLI_PROMPT_VERSION } from "./infrastructure/claude-cli/translati
 export { translationCacheKey, cacheKeyString, type TranslationCacheKey, type EngineVersion } from "./domain/translation-cache-key.ts";
 export type { TranslationCache, CachedTranslation } from "./application/translation-cache.port.ts";
 export { InMemoryTranslationCache } from "./infrastructure/in-memory-translation-cache.ts";
+export { CachingTranslator, type CachingTranslatorOptions, type CachingObserver, type CacheStage } from "./application/caching-translator.ts";
