@@ -78,6 +78,27 @@ describe("openAppStorage", () => {
     expect(sha(file)).toBe(before);
   });
 
+  it("lỗi bật WAL (kết nối khác giữ khoá đọc) → StorageError open_failed, file không đổi", () => {
+    const file = path.join(dir, "locked.db");
+    const holder = new DatabaseSync(file);
+    holder.exec("CREATE TABLE t (a TEXT); INSERT INTO t VALUES ('x')");
+    const before = sha(file);
+    holder.exec("BEGIN");
+    holder.prepare("SELECT * FROM t").all();
+    try {
+      openAppStorage({ path: file });
+      expect.unreachable();
+    } catch (e) {
+      expect(e).toBeInstanceOf(StorageError);
+      expect((e as StorageError).reason).toBe("open_failed");
+      expect((e as StorageError).sqliteCode).toBe(5);
+    } finally {
+      holder.exec("ROLLBACK");
+      holder.close();
+    }
+    expect(sha(file)).toBe(before);
+  }, 20_000);
+
   it("DB mới tạo bằng openAppStorage ở chế độ wal", () => {
     const db = openAppStorage({ path: path.join(dir, "n.db") });
     expect(db.raw.prepare("PRAGMA journal_mode").get()).toMatchObject({ journal_mode: "wal" });

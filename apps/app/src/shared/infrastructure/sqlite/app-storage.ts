@@ -1,7 +1,7 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { assertSchemaNotTooNew, loadMigrations, runMigrations } from "./migrations.ts";
-import { openDatabase, type Database } from "./open-database.ts";
+import { isCorruptionCode, openDatabase, type Database } from "./open-database.ts";
 import { StorageError, sqliteErrorInfo } from "./storage-error.ts";
 
 /** Tạo dataDir (nếu là file), mở DB, chạy migration. Lỗi nào cũng ném ngay, không thử lại. */
@@ -23,7 +23,16 @@ export function openAppStorage(opts: { path: string }): Database {
     runMigrations(db, migrations);
   } catch (e) {
     db.close();
-    throw e;
+    throw toStorageError(e);
   }
   return db;
+}
+
+/** Lỗi SQLite thô (vd BUSY khi bật WAL) thành StorageError để main.ts in dòng [storage] thay vì crash. */
+function toStorageError(e: unknown): StorageError {
+  if (e instanceof StorageError) return e;
+  const info = sqliteErrorInfo(e);
+  if (isCorruptionCode(info.sqliteCode)) return new StorageError("corrupt", "File DB hỏng hoặc không phải SQLite", info);
+  if (info.sqliteCode === undefined) throw e; // lỗi lập trình, không phải SQLite
+  return new StorageError("open_failed", "Không chuẩn bị được DB", info);
 }
