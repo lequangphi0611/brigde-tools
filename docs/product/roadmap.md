@@ -50,7 +50,7 @@ Thiết kế phòng thủ vì không debug được trên máy thật: chỗ nà
 |---|---|---|---|---|---|
 | 001 ✅ | Dịch ja→vi qua `ClaudeCliTranslator`, **cả issue trong một lần gọi** (title + body + comment mới; ~100s/lần trên máy thật, xem `docs/spikes/claude-cli-windows.md`), giữ nguyên code block, inline code, link, `@mention`; nội dung issue được coi là dữ liệu (khối phân cách, vô hiệu hoá thẻ giả) | Translation | – | M | S0.1 |
 | 002 ✅ | Glossary hai tầng ghép vào prompt (bản của project thắng khi trùng) | Translation | – | S | 001 |
-| 003 | Cache bản dịch theo `hash + direction + glossaryVersion` (port trong core-translate, adapter ở app) | Translation | – | S | 001 |
+| 003 | (Làm sau 004, user đồng ý 2026-11-27 để adapter dùng SQLite ngay) Cache bản dịch theo `hash + direction + glossaryVersion` (port trong core-translate, adapter ở app) | Translation | – | S | 001 |
 
 **Xong khi:** một script dịch được title + body của một issue thật trên Windows, chạy lần hai thì lấy từ cache.
 
@@ -63,7 +63,7 @@ Lần đầu tiên dùng thật được. Project cấu hình cứng trong file 
 | # | Story | Context | UI | Cỡ | Phụ thuộc |
 |---|---|---|---|---|---|
 | 004 | Lưu trữ SQLite + migration + bảng `setting` | hạ tầng | – | S | ADR-0004 |
-| 005 | Poller một project: phát hiện issue mới và comment mới theo `Issue.updatedAt`; lần đầu chỉ lấy mốc thời gian; issue bị sửa thì dịch lại nhưng không báo. Có `GhCliGateway` + fake `gh` ở mức process | Tracking | – | M | S0.2, 004 |
+| 005 | Poller một project: phát hiện issue mới và comment mới theo `Issue.updatedAt`; lần đầu chỉ lấy mốc thời gian; issue bị sửa thì dịch lại nhưng không báo. Có `GhCliGateway` + fake `gh` ở mức process. Lắp storage thật (`openAppStorage` + `dataDir`) vào nhánh adapter thật; dòng lỗi `StorageError` của `main.ts` có đường dẫn DB, tách hàm format có unit test (dời từ review 004) | Tracking | – | M | S0.2, 004 |
 | 006 | Hàng đợi dịch bền (bảng `job`): tối đa 2 job song song (≈70 lần gọi/giờ), gộp các comment mới của cùng issue vào một job, retry có giới hạn, ưu tiên mục liên quan tới tôi, job dở được chạy lại sau khi restart | Translation | – | M | 003, 004 |
 | 007 | Toast khi bản dịch đã sẵn (issue mới), title tiếng Việt, bấm mở đúng issue | Notification | – | S | 006, ADR-0005 |
 | 008 | Trang issue: tiếng Việt và tiếng Nhật song song, có link sang GitHub, trạng thái "đang dịch" và "dịch lỗi" | Tracking | có | M | 006 |
