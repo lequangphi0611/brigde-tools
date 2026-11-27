@@ -11,7 +11,10 @@ Khi story đưa thêm khái niệm, `analyst` thêm vào đây TRƯỚC khi impl
 | Mốc đã thấy | `lastSeen` | Tracking | `Issue.updatedAt` lớn nhất đã xử lý. Luôn là của Issue, KHÔNG phải của project item |
 | Chu kỳ poll | `PollCycle` | Tracking | Một lần quét một project tìm thay đổi |
 | Lần quét board | `ProjectScan` | Tracking | Kết quả `GitHubGateway.scanProject`: mọi Issue trên board (`ProjectIssueStamp`), số item bị bỏ qua (PR, draft, không có quyền), số trang (story 005a) |
-| Mốc của issue trên board | `ProjectIssueStamp` | Tracking | `{ nodeId, updatedAt }` với `updatedAt` = `Issue.updatedAt`, không phải của project item |
+| Mốc của issue trên board | `ProjectIssueStamp` | Tracking | `{ nodeId, updatedAt, state, status }`: `updatedAt` = `Issue.updatedAt` (không phải của project item), `state` = `OPEN`/`CLOSED`, `status` = giá trị field Status của item hoặc `null`. Adapter chỉ trả dữ liệu, không áp quy tắc close |
+| Issue đã đóng | `closed` (quy tắc của 005b) | Tracking | Issue có `state = CLOSED` **hoặc** giá trị Status của item thuộc danh sách close của project. Mọi chu kỳ: đang đóng thì không dịch, không báo (kể cả comment mới); mở lại thì theo dõi bình thường; người dùng vẫn listen riêng (019) / Dịch ngay (011) được |
+| Field Status | `statusField` | Tracking | Tên field single select của Projects v2 dùng cho quy tắc close, cấu hình theo project (mặc định `Status`). Giá trị đọc được: `ProjectItemStatus { name, optionId }` |
+| Danh sách close | `closedStatuses` | Tracking | Các giá trị Status coi là đã đóng, theo project; rỗng = chỉ dùng `state` (tên code chốt ở 005b) |
 | Chi tiết issue | `IssueDetails` | Tracking | Kết quả `GitHubGateway.fetchIssueDetails`: `GitHubIssueSnapshot` (kèm mọi comment) + `missing` (id không còn đọc được) |
 | Lỗi GitHub | `GitHubFailure` | Tracking | Lỗi của port `GitHubGateway`: `reason` = `gh_not_found` / `not_authenticated` / `scope_missing` / `project_not_found` / `projects_v2_unsupported` / `network` / `timeout` / `process_failed` / `bad_output`; không chứa owner, hostname, id hay nội dung |
 | Adapter gh | `GhCliGateway` | Tracking | Adapter thật của `GitHubGateway`: gọi `gh api graphql` qua `runGhCli` (không shell, query + biến qua stdin), ADR-0010 |

@@ -46,10 +46,18 @@
 Port cũ lọc theo `since` nên không thấy issue cũ vừa được thêm vào board, và không có comment. Port mới (tên chốt ở bước implement, theo từ vựng):
 
 ```ts
-interface ProjectIssueStamp { nodeId: string; updatedAt: string }   // updatedAt = Issue.updatedAt (ISO), KHÔNG phải item.updatedAt
+interface ProjectItemStatus { name: string; optionId: string }     // giá trị field single select của item trên board
+interface ProjectIssueStamp {
+  nodeId: string;
+  updatedAt: string;                                                 // Issue.updatedAt (ISO), KHÔNG phải item.updatedAt
+  state: "OPEN" | "CLOSED";                                          // Issue.state
+  status: ProjectItemStatus | null;                                  // null: không yêu cầu field, field không có, item chưa có giá trị, hoặc field không phải single select
+}
+interface ScanOptions { statusField: string | null }                 // tên field Status của project (005b lấy từ cấu hình); null = không đọc
 interface ProjectScan {
   issues: ProjectIssueStamp[];                                       // mọi Issue trên board, mỗi nodeId một lần
   skipped: { pullRequest: number; draftIssue: number; inaccessible: number };
+  statusField: "found" | "missing" | "not_single_select" | "not_requested";
   pages: number;
 }
 interface GitHubCommentSnapshot { nodeId: string; author: string | null; body: string; createdAt: string; updatedAt: string }
@@ -60,16 +68,17 @@ interface GitHubIssueSnapshot {
 interface IssueDetails { issues: GitHubIssueSnapshot[]; missing: string[] }  // missing = nodeId không còn đọc được
 
 interface GitHubGateway {
-  scanProject(project: ProjectRef): Promise<ProjectScan>;
+  scanProject(project: ProjectRef, options: ScanOptions): Promise<ProjectScan>;
   fetchIssueDetails(nodeIds: readonly string[]): Promise<IssueDetails>;
 }
 ```
 - Lỗi: ném `GitHubFailure { reason, detail? }`, message không chứa owner, hostname, id hay nội dung. `reason`: `gh_not_found` / `not_authenticated` / `scope_missing` / `project_not_found` / `projects_v2_unsupported` / `network` / `timeout` / `process_failed` / `bad_output`.
 - `author = null` khi tài khoản đã xoá (ghost).
+- **Adapter chỉ trả dữ liệu, không áp quy tắc close.** "Issue đã đóng" (`state = CLOSED` hoặc `status.name` thuộc danh sách close của project) là quy tắc domain của 005b. So theo `name`; `optionId` trả kèm để 005b/014 có thể đổi sang so theo id nếu tên option bị đổi.
 - `FakeGitHub` giữ dữ liệu trong bộ nhớ theo cùng hình dạng; harness `seedIssues` nhận snapshot mới (comment tuỳ chọn, mặc định `[]`).
 
 ### Cách lấy dữ liệu (hai pha, xem ADR-0010 nháp)
-1. **Quét** (mỗi chu kỳ): phân trang `projectV2.items(first: 100)` đến hết, mỗi item chỉ lấy `content { __typename ... on Issue { id updatedAt } }`. Giống query `pageQ` đã chạy được trong `diagnose` (286 item ≈ 3 trang). Item là `PullRequest` / `DraftIssue` / `content = null` (không có quyền) → đếm vào `skipped`.
+1. **Quét** (mỗi chu kỳ): phân trang `projectV2.items(first: 100)` đến hết, mỗi item lấy `content { __typename ... on Issue { id updatedAt state } }` và, khi `statusField` khác null, `fieldValueByName(name: $statusField) { __typename ... on ProjectV2ItemFieldSingleSelectValue { name optionId } }` (giá trị kiểu khác → `status = null`). Trang đầu lấy thêm `projectV2.field(name: $statusField) { __typename }` để phân biệt field không có (`missing`) với item chưa có giá trị; field tồn tại mà không phải `ProjectV2SingleSelectField` → `not_single_select`. Tên field là biến GraphQL; `statusField = null` thì bỏ hai phần này (directive `@include(if: $withStatus)`). Phần còn lại giống query `pageQ` đã chạy được trong `diagnose` (286 item ≈ 3 trang). **Cần kiểm chứng:** `fieldValueByName` / `field(name:)` trên GHES 3.20 (dòng `item scan` của `diagnose` đo `closed=` và `statusField=`). Item là `PullRequest` / `DraftIssue` / `content = null` (không có quyền) → đếm vào `skipped`.
 2. **Chi tiết** (chỉ cho issue đã đổi, 10–50 mục/ngày theo vision): `nodes(ids: $ids)` theo lô `DETAIL_BATCH` id (mặc định 25, chỉnh theo đo ở bước 1), mỗi issue lấy `id number url title body updatedAt repository { nameWithOwner } assignees(first: 20) { nodes { login } } comments(first: 100) { pageInfo totalCount nodes { id author { login } body createdAt updatedAt } }`. Issue có hơn 100 comment → gọi thêm `node(id)` với `comments(after:)` cho tới hết.
 
 Không gộp comment vào query quét: mỗi chu kỳ sẽ kéo body + comment của cả ~286 issue (vài MB mỗi 5 phút) chỉ để dùng vài mục. Chi phí hai pha lúc yên: 3 lần gọi `gh`/chu kỳ; lúc có thay đổi: thêm `ceil(n / DETAIL_BATCH)` lần (+ lần phân trang comment hiếm gặp).
@@ -84,21 +93,24 @@ Không gộp comment vào query quét: mỗi chu kỳ sẽ kéo body + comment c
 
 ### Lệnh `github-check`
 ```
-pnpm -s github-check --owner <org|user> --number <n> [--owner-type user] [--days <1–30, mặc định 7>] [--max-details <1–200, mặc định 50>]
+pnpm -s github-check --owner <org|user> --number <n> [--owner-type user] [--status-field <tên, mặc định Status>] [--days <1–30, mặc định 7>] [--max-details <1–200, mặc định 50>]
 ```
 - Root script `tsx apps/app/src/cli/github-check/main.ts` (giống `translate-issue`, cần `pnpm install`, đứng trong repo).
+- `--status-field <tên>` (mặc định `Status`) truyền vào `scanProject`. Tên field và tên giá trị Status không bao giờ được in.
 - Bước: kiểm `GH_HOST` → `scanProject` → chọn các issue có `Issue.updatedAt` trong `--days` ngày gần nhất (tối đa `--max-details`, mới nhất trước) → `fetchIssueDetails` → in dòng trạng thái. Không ghi DB, không gọi Claude.
 - `--owner` chỉ để gọi, không bao giờ in ra.
 
 Dòng trạng thái (một dòng, cuối cùng):
 ```
-github-check OK host=GH_HOST items=286 issues=278 skipped=pr:5,draft:3,noaccess:0 pages=3 scanMs=4100 recent=23 details=23 missing=0 detailCalls=1 comments=140 maxComments=31 commentPages=0 jaChars=51234 newerComment=0 editedComment=2 detailMs=2900
+github-check OK host=GH_HOST items=286 issues=278 skipped=pr:5,draft:3,noaccess:0 closed=40 statusField=found statusSet=270 statusOptions=5 pages=3 scanMs=4100 recent=23 details=23 missing=0 detailCalls=1 comments=140 maxComments=31 commentPages=0 jaChars=51234 newerComment=0 editedComment=2 detailMs=2900
 ```
 
 | Trường | Ý nghĩa |
 |---|---|
 | `host` | `GH_HOST` (có đặt) — không in giá trị |
 | `items`, `issues`, `skipped` | Số item trên board; số Issue; số PR / draft / không có quyền |
+| `closed` | Số Issue có `state = CLOSED` |
+| `statusField`, `statusSet`, `statusOptions` | Field Status: `found` / `missing` / `not_single_select`; số Issue có giá trị Status; số giá trị Status khác nhau đang dùng. Chỉ số đếm, không in tên field hay tên giá trị |
 | `pages`, `scanMs` | Số trang và thời gian quét (chi phí mỗi chu kỳ của 005b) |
 | `recent`, `details`, `missing` | Issue đổi trong `--days`; số lấy chi tiết được; số id không còn |
 | `detailCalls`, `commentPages` | Số lần gọi `gh` cho chi tiết; số lần gọi thêm để phân trang comment |
@@ -115,7 +127,7 @@ Chạy cùng `--owner/--number` như hiện có, sau các dòng `filter …`. Ch
 
 | Dòng | Đo gì | Quyết định gì |
 |---|---|---|
-| `item scan` | Quét toàn bộ item chỉ với `content{… on Issue{id updatedAt}}`: `pages=3 items=286 issues=… ms=…` | Thời gian mỗi chu kỳ → chu kỳ poll mặc định của 005b |
+| `item scan` | Quét toàn bộ item với `content{… on Issue{id updatedAt state}}` + `fieldValueByName(name: "Status")`: `pages=3 items=286 issues=… closed=… statusField=found|missing|… ms=…` (do implementer khác thêm vào `scripts/diagnose`) | Thời gian mỗi chu kỳ → chu kỳ poll mặc định của 005b; `fieldValueByName` chạy được trên GHES không |
 | `gql stdin` | Một query nhỏ gửi bằng `gh api graphql --input -` (JSON qua stdin): `OK` / mã lỗi | `OK` → adapter dùng stdin; không thì quay về `-f query=… -F …` như `diagnose` đang dùng (đã chạy được) và danh sách id đi bằng biến kiểu mảng hoặc alias |
 | `comments` | `nodes(ids:)` cho mọi issue, lô 25, `comments(last:1){totalCount nodes{createdAt updatedAt}}`: `issues=… withComments=… maxComments=… over100=… newerComment=… editedComment=… batchMs=…` | `newerComment` = 0 xác nhận giả định cốt lõi (comment mới đẩy `Issue.updatedAt`); `over100` cho biết có cần phân trang comment; `batchMs` để chọn `DETAIL_BATCH` |
 | `gql partial` | `nodes(ids: [<id thật>, <id giả hợp lệ về cú pháp>])`: `exit=<mã> stdoutJson=yes|no data=<số node không null>` | Cách adapter xử lý lỗi một phần (xem "Gọi gh") |
@@ -133,6 +145,21 @@ Scenario: AC-1 Quét toàn bộ board, mốc là Issue.updatedAt
   Then nhận đúng 250 ProjectIssueStamp, mỗi nodeId một lần
   And updatedAt của mỗi stamp bằng Issue.updatedAt, không bằng item.updatedAt
   And pages = 3 và fake gh nhận 3 lần gọi, lần 2 và 3 mang cursor của trang trước
+
+Scenario Outline: AC-1b Quét trả state của Issue và giá trị Status của item, không áp quy tắc
+  Given board có Issue "I_open" (OPEN, Status "In Progress"), "I_closed" (CLOSED, Status "Done"), "I_nostatus" (OPEN, chưa có Status), "I_text" (OPEN, field "Status" của project là kiểu <kiểu field>)
+  When gọi scanProject(project, { statusField: <statusField> })
+  Then stamp của I_closed có state "CLOSED", các issue khác "OPEN", không issue nào bị loại khỏi kết quả vì close
+  And ProjectScan.statusField = <kết quả>
+  And status của I_open, I_closed, I_nostatus là <status>
+  And statusField khác null thì tên field nằm trong variables của stdin, không nằm trong chuỗi query
+
+  Examples:
+    | kiểu field     | statusField | kết quả           | status                                                              |
+    | single select  | "Status"    | found             | {name "In Progress", optionId}, {name "Done", optionId}, null       |
+    | single select  | "Trạng thái"| missing           | null, null, null                                                    |
+    | text           | "Status"    | not_single_select | null, null, null                                                    |
+    | single select  | null        | not_requested     | null, null, null (query không có fieldValueByName)                  |
 
 Scenario: AC-2 Bỏ qua pull request, draft issue và item không có quyền
   Given board có 3 Issue, 2 PullRequest, 1 DraftIssue và 1 item content = null
@@ -200,12 +227,13 @@ Scenario: AC-8 Gọi gh an toàn
 Scenario: AC-9 FakeGitHub và GhCliGateway cùng hợp đồng
   Given một bộ fixture dùng chung (board có Issue, PR, draft; issue có comment tiếng Nhật; một id không còn)
   When chạy cùng bộ test hợp đồng trên FakeGitHub và trên GhCliGateway + fake gh
-  Then hai adapter trả cùng ProjectScan (issues, skipped) và cùng IssueDetails (issues, missing)
+  Then hai adapter trả cùng ProjectScan (issues gồm state và status, skipped, statusField) và cùng IssueDetails (issues, missing)
 
 Scenario: AC-10 github-check in một dòng số đếm
   Given GH_HOST được đặt và fake gh có board 286 item (278 Issue, 5 PR, 3 draft), 23 issue đổi trong 7 ngày, tổng 140 comment tiếng Nhật
   When chạy github-check --owner acme --number 3
   Then stdout chỉ có một dòng "github-check OK host=GH_HOST items=286 issues=278 skipped=pr:5,draft:3,noaccess:0 pages=3 … recent=23 details=23 missing=0 … comments=140 …"
+  And closed, statusField, statusSet, statusOptions đúng theo fixture (fixture có 40 issue CLOSED, field "Status" single select 5 giá trị)
   And jaChars > 0, newerComment và editedComment đúng theo fixture
   And exit code 0
 
@@ -229,7 +257,7 @@ Scenario Outline: AC-12 github-check báo lỗi bằng mã
     | fake gh chế độ project null   | --owner acme --number 3       | github:project_not_found | 1    |
 
 Scenario: AC-13 github-check không in dữ liệu
-  Given fixture chứa các chuỗi đánh dấu trong owner, hostname, repo, nodeId, title, body, comment, login
+  Given fixture chứa các chuỗi đánh dấu trong owner, hostname, repo, nodeId, title, body, comment, login, tên field Status, tên giá trị Status
   When chạy github-check ở chế độ OK và ở mọi chế độ lỗi của AC-12
   Then stdout và stderr (không có --raw) không chứa chuỗi đánh dấu nào
 
@@ -242,7 +270,7 @@ Scenario: AC-14 Phần tính toán của dòng diagnose mới
 
 | AC | Khoá bằng | File |
 |---|---|---|
-| AC-1 … AC-8 | adapter mức process: `GhCliGateway` + `fake-gh.mjs` | `apps/app/src/contexts/tracking/infrastructure/gh-cli/gh-cli-gateway.test.ts` |
+| AC-1, AC-1b, AC-2 … AC-8 | adapter mức process: `GhCliGateway` + `fake-gh.mjs` | `apps/app/src/contexts/tracking/infrastructure/gh-cli/gh-cli-gateway.test.ts` |
 | AC-7 (phần phân loại thuần) | unit | `apps/app/src/contexts/tracking/infrastructure/gh-cli/gh-failure.test.ts` |
 | AC-9 | contract test chung, chạy cho cả hai adapter | `apps/app/src/shared/ports/github-gateway.contract.ts` + `apps/app/src/test-harness/fake-github.test.ts` + `gh-cli-gateway.test.ts` |
 | AC-10 … AC-13 | unit trong process: `runGithubCheck({ argv, env, stdout, stderr, gateway factory })` với `GhCliGateway` + fake gh thật | `apps/app/src/cli/github-check/run-github-check.test.ts` |
@@ -254,7 +282,7 @@ Kiểm trên máy thật (ngoài `pnpm verify`, người dùng gõ lại dòng k
 ## Tác động domain
 - Thuật ngữ mới (→ `ubiquitous-language.md`, đã thêm): `ProjectScan`, `ProjectIssueStamp`, `IssueDetails`, `GitHubFailure`, `GhCliGateway`. Từ nháp cho 005b chưa thêm (chốt ở 005b).
 - Aggregate / invariant / event: không đổi ở 005a. Ghi chú cho 005b trong `bounded-contexts/tracking.md`: so mốc theo từng issue (`Issue.ghUpdatedAt`) để thấy cả issue cũ mới được thêm vào board.
-- Port đổi: `GitHubGateway.fetchUpdatedIssues(project, since)` → `scanProject(project)` + `fetchIssueDetails(nodeIds)`; `GitHubIssueSnapshot` thêm `comments`. Đã cập nhật `bounded-contexts/tracking.md`.
+- Port đổi: `GitHubGateway.fetchUpdatedIssues(project, since)` → `scanProject(project)` + `fetchIssueDetails(nodeIds)`; `GitHubIssueSnapshot` thêm `comments`. `ProjectIssueStamp` có `state` + `status`, `scanProject` nhận `ScanOptions { statusField }`, `ProjectScan` có `statusField` (quy tắc close, 2026-11-27). Thuật ngữ thêm: `ProjectItemStatus`, "Issue đã đóng", `statusField`, `closedStatuses` (hai cái sau chốt tên ở 005b). Đã cập nhật `bounded-contexts/tracking.md`.
 - ADR: **ADR-0010 (Proposed)** — đọc Projects v2 qua `gh api graphql` hai pha, query qua stdin, xử lý lỗi một phần.
 
 ## Việc dời từ 003b / 004: thuộc đâu
@@ -276,6 +304,7 @@ Kiểm trên máy thật (ngoài `pnpm verify`, người dùng gõ lại dòng k
 - Mọi thứ của 005b (mục cuối) cho tới khi được phân tích riêng.
 - Lọc `items(query: "updated:…")` phía server: spike S0.2 kết luận không được làm nguồn duy nhất; chỉ thu hẹp được mức ngày; GHES tắt rate limit nên không cần.
 - Pull request trên board (vision chỉ nói issue), draft issue: chỉ đếm.
+- Áp quy tắc close (005b). Field khác ngoài Status, field Status kiểu khác single select (chỉ báo `not_single_select`).
 - Item bị archive trên board: theo mặc định của `items` (Cần kiểm chứng nếu sau này thiếu issue).
 - Issue bị xoá khỏi board / bị xoá hẳn: 005a chỉ báo `missing`; xử lý ở 005b.
 - Phát hiện assign / mention (014). Label, milestone, field của Project.
@@ -284,20 +313,21 @@ Kiểm trên máy thật (ngoài `pnpm verify`, người dùng gõ lại dòng k
 - [x] 1. **Tách:** làm 005a trước; 005b là dòng riêng trong roadmap M2 (phụ thuộc 005a, 004); 009 và 013 phụ thuộc 005b.
 - [x] 2. **`diagnose` trước:** user chạy 4 dòng mới trên máy thật ngay sau bước 1. Kế hoạch có **điểm dừng** sau bước 1: chờ số đo, chốt `DETAIL_BATCH`, cách truyền query (`--input -` hay `-f`) và xử lý lỗi một phần trước khi viết adapter. Nếu `newerComment > 0` thì báo user, xem lại cách 005b phát hiện comment mới.
 - [x] 3. **`GH_HOST` bắt buộc:** `github-check` báo `FAIL gh_host_unset` (exit 2); nhánh thật của app (005b) theo cùng quy tắc.
-- [x] 4. **Lệnh:** `pnpm -s github-check --owner --number [--owner-type user] [--days] [--max-details] [--raw]`, giữ như đề xuất.
+- [x] 4. **Lệnh:** `pnpm -s github-check --owner --number [--owner-type user] [--days] [--max-details] [--raw]`, giữ như đề xuất; thêm `--status-field` sau khi có quy tắc close.
 - [x] 5. **Pull request trên board:** chỉ đếm vào `skipped`, không theo dõi. Draft issue và item không có quyền cũng vậy.
 - [x] 6. **Không có e2e:** khoá bằng Vitest + `fake-gh.mjs` mức process + contract test; bước `e2e-writer` bỏ qua.
+- [x] 7. **Quy tắc close (user chốt 2026-11-27, áp dụng ở 005b):** issue đã đóng = `state = CLOSED` hoặc giá trị Status của item thuộc danh sách close cấu hình theo project (mặc định field `Status`, danh sách rỗng = chỉ dùng state). 005a chỉ trả `state` và `status` trong `ProjectIssueStamp`, không áp quy tắc.
 
 ## Câu hỏi mở
 Không còn câu hỏi chặn 005a. Các điểm "Cần kiểm chứng" (`--input -`, lỗi một phần, `newerComment`) được trả lời bằng số đo ở điểm dừng sau bước 1.
 
 ## Kế hoạch implement 005a
 (Implementer làm theo thứ tự, mỗi bước một commit, mỗi bước có test xanh.)
-1. **`diagnose`:** thêm `item scan`, `gql stdin`, `comments`, `gql partial` vào `scripts/diagnose/index.mjs`; hàm thuần trong `checks.mjs` + test (AC-14); thêm dòng vào bảng đọc kết quả của `docs/spikes/diagnose.md`.    **ĐIỂM DỪNG:** implementer dừng sau commit bước 1. Người dùng chạy `pnpm diagnose --owner … --number …` trên máy thật và gõ lại 4 dòng mới; orchestrator ghi vào `docs/spikes/projects-v2-polling.md` (Lần 4). Trước khi làm tiếp bước 2, chốt và ghi vào Workflow log + mục Thiết kế: (a) `DETAIL_BATCH` theo `batchMs`; (b) cách truyền query theo `gql stdin` (`--input -` hay quay về `-f`/`-F`); (c) xử lý lỗi một phần theo `gql partial` (dùng `data` từ stdout, hay chia nhỏ lô để cô lập id hỏng; khi đó sửa AC-6 và báo user); (d) có cần phân trang comment theo `over100` (AC-4 vẫn giữ). `newerComment > 0` → báo user trước khi làm tiếp.
+1. **`diagnose`:** thêm `item scan` (phần `closed=` / `statusField=` do một implementer khác đang sửa; bước này chỉ bổ sung phần còn thiếu), `gql stdin`, `comments`, `gql partial` vào `scripts/diagnose/index.mjs`; hàm thuần trong `checks.mjs` + test (AC-14); thêm dòng vào bảng đọc kết quả của `docs/spikes/diagnose.md`.    **ĐIỂM DỪNG:** implementer dừng sau commit bước 1. Người dùng chạy `pnpm diagnose --owner … --number …` trên máy thật và gõ lại 4 dòng mới; orchestrator ghi vào `docs/spikes/projects-v2-polling.md` (Lần 4). Trước khi làm tiếp bước 2, chốt và ghi vào Workflow log + mục Thiết kế: (a) `DETAIL_BATCH` theo `batchMs`; (b) cách truyền query theo `gql stdin` (`--input -` hay quay về `-f`/`-F`); (c) xử lý lỗi một phần theo `gql partial` (dùng `data` từ stdout, hay chia nhỏ lô để cô lập id hỏng; khi đó sửa AC-6 và báo user); (d) có cần phân trang comment theo `over100` (AC-4 vẫn giữ); (e) `fieldValueByName` / `field(name:)` chạy được trên GHES theo `closed=` / `statusField=` của dòng `item scan` (không chạy được → báo user, quy tắc close chỉ dùng state cho tới khi có cách khác). `newerComment > 0` → báo user trước khi làm tiếp.
 2. **Port:** đổi `shared/ports/github-gateway.port.ts` (kiểu ở mục Thiết kế, `GitHubFailure`); viết contract test `github-gateway.contract.ts`; cập nhật `FakeGitHub` + `routes.ts`/`Harness.seedIssues` theo hình dạng mới; contract xanh với `FakeGitHub` (AC-9 phía fake). `e2e/specs/smoke.spec.ts` không đổi.
 3. **`fake-gh.mjs`** trong `contexts/tracking/infrastructure/gh-cli/testing/`: đọc fixture từ biến môi trường, nhận diện query qua `operationName` trong body, chế độ ok/partial/auth/scope/project-null/unsupported/network/hang/fail/garbage/bad-shape/huge, ghi argv/stdin/env ra file. Test riêng cho fake.
 4. **`runGhCli` + phân loại lỗi** (`gh-cli-runner.ts`, `gh-failure.ts`): spawn không shell, stdin JSON, timeout + kill, giới hạn stdout, `ENOENT`; test AC-7, AC-8.
-5. **`GhCliGateway`**: query quét + phân trang (AC-1, AC-2), chi tiết theo lô + phân trang comment + lỗi một phần (AC-3 … AC-6), zod cho shape; chạy contract test với fake gh (AC-9).
+5. **`GhCliGateway`**: query quét + phân trang + state/Status (AC-1, AC-1b, AC-2), chi tiết theo lô + phân trang comment + lỗi một phần (AC-3 … AC-6), zod cho shape; chạy contract test với fake gh (AC-9).
 6. **`github-check`**: `run-github-check.ts` (parse tham số, chọn issue gần đây, đếm, `formatStatusLine`), `main.ts`, root script `github-check` trong `package.json`; test AC-10 … AC-13.
 7. **Docs:** mục "Kiểm adapter GitHub (005a)" trong `docs/spikes/diagnose.md` (cách chạy, bảng trường, chỉ gõ lại dòng trạng thái); thêm lệnh vào `CLAUDE.md`; ADR-0010 sang Accepted sau khi đã chốt các điểm ở điểm dừng và user duyệt ở cuối story.
 
@@ -308,6 +338,7 @@ Không còn câu hỏi chặn 005a. Các điểm "Cần kiểm chứng" (`--inpu
 ### Phạm vi dự kiến
 - Domain Tracking thuần: `TrackedProject` (một project từ cấu hình), `Issue` với `ghUpdatedAt` (mốc của **từng** issue, luôn là `Issue.updatedAt`), `Content` (`kind`, `ghId`, `hash`, `ghCreatedAt`); `lastSeen` của project = `Issue.updatedAt` lớn nhất đã xử lý (cho 009/018).
 - `PollCycle` (application): `scanProject` → so với trạng thái đã lưu → `fetchIssueDetails` cho issue mới hoặc có `Issue.updatedAt` lớn hơn mốc đã lưu → phân loại → lưu + phát event trong một transaction.
+- **Quy tắc close (user chốt 2026-11-27):** issue đã đóng = `state = CLOSED` **hoặc** `status.name` thuộc danh sách close của project. Tên field Status và danh sách giá trị close cấu hình theo từng project (mặc định field `Status`, danh sách rỗng = chỉ dùng state). Áp dụng **mọi chu kỳ**: issue đang đóng thì không lấy chi tiết để dịch, không phát event dịch/báo, kể cả có comment mới. Mở lại (state OPEN và Status ra khỏi nhóm close) thì theo dõi bình thường. Người dùng vẫn chủ động theo dõi/dịch issue đóng được bằng listen từng issue (019) hoặc "Dịch ngay" (011). Lần đầu chạy vẫn chỉ lấy mốc.
 - Vòng lặp: chu kỳ theo cấu hình (mặc định theo số đo `item scan`), không chạy chồng hai chu kỳ, lỗi một chu kỳ không dừng vòng lặp.
 - Migration `0003-tracking.sql` (project, issue, content), repository SQLite trong `contexts/tracking/infrastructure/`.
 - Nhánh adapter thật của `buildDeps`: `resolveDataDir` + `openAppStorage(<dataDir>/app.db)`, `buildRealTranslator`, `GhCliGateway`, notifier không làm gì cho tới 007, `systemClock`; khởi động vòng lặp poll.
@@ -328,12 +359,20 @@ Không còn câu hỏi chặn 005a. Các điểm "Cần kiểm chứng" (`--inpu
 - B11 Body rỗng / chỉ có phần giữ nguyên → lưu `Content`, vẫn phát event (006 bỏ đoạn rỗng theo `CachingTranslator`).
 - B12 Hai chu kỳ không chạy chồng (chu kỳ chậm hơn chu kỳ poll).
 - B13 `formatStorageError` cho từng `reason`, có/không `migration`, `sqliteCode`; đường dẫn ở dòng riêng.
+- B15 Issue đang đóng (state CLOSED, hoặc Status thuộc danh sách close) có comment mới / bị sửa → không lấy chi tiết, không `ContentChanged`, không `IssueDiscovered`; áp dụng mọi chu kỳ.
+- B16 Issue mới xuất hiện trên board mà đã đóng → không event (cách lưu mốc theo Câu hỏi 005b-6).
+- B17 Issue mở lại (state OPEN hoặc Status ra khỏi nhóm close) → chu kỳ đó và sau đó theo dõi bình thường; comment sau thời điểm mở lại là mới (comment trong lúc đóng theo Câu hỏi 005b-6).
+- B18 Danh sách close rỗng → chỉ dùng state; field Status không có (`statusField = missing`) mà danh sách close không rỗng → chỉ dùng state và log cảnh báo bằng mã (`[poll] WARN status_field_missing`).
+- B19 Issue người dùng đã chủ động listen (019) thì vẫn theo dõi khi đóng (chỉ khi có 019).
 - B14 Nhánh thật: không có `GH_HOST` hoặc thiếu cấu hình project → dừng với dòng lỗi mã (không crash thô).
 
 ### Câu hỏi cho 005b (trả lời khi phân tích 005b, ghi ở đây để không quên)
 - 005b-1. **Chống mất event khi 006 có:** (a) handler đồng bộ chạy trong cùng transaction SQLite với lúc lưu trạng thái Tracking (đơn giản; `node:sqlite` đồng bộ; lỗi handler làm chu kỳ rollback rồi chu kỳ sau làm lại) hay (b) bảng outbox của Tracking + dispatcher (handler bất đồng bộ được, thêm bảng và trạng thái đã giao). Nghiêng về (a) cho app một người dùng; cần ADR khi chốt.
 - 005b-2. Issue cũ (`Issue.updatedAt` cũ) mới được kéo vào board: coi là "issue mới" (báo) hay chỉ lấy mốc như lần đầu? Đề xuất: issue mới, vì với người dùng nó mới xuất hiện trên board.
 - 005b-3. Cấu hình project tạm (tới 013) đặt ở đâu: đề xuất `<dataDir>/config.json` (`{ project: { owner, ownerType, number }, pollIntervalMin }`), không mất khi thay zip. Cấu hình Claude CLI của server: tạm đọc `<repo>/config/claude-cli.local.json` như `translate-issue`, chuyển ra ngoài ở 021.
+- 005b-5. **Chuyển sang đóng / ra khỏi đóng có phát event không?** Ví dụ `IssueClosed` / `IssueReopened` cho 006 (huỷ job đang chờ của issue vừa đóng?), 008/010 (hiện trạng thái), 018/019. Đề xuất: 005b chỉ lưu trạng thái đóng của issue và không phát event; job đã xếp hàng trước khi đóng thì 006 quyết (chạy tiếp hay bỏ).
+- 005b-6. **Comment phát sinh trong lúc issue đóng thì khi mở lại có tính là mới không?** (a) Không: trong lúc đóng vẫn cập nhật mốc của issue, mở lại chỉ comment sau đó là mới (không báo dồn, khớp tinh thần "lần đầu chỉ lấy mốc"); (b) Có: giữ mốc lúc đóng, mở lại thì báo các comment trong lúc đóng. Đề xuất (a). Cùng câu hỏi cho issue mới vào board mà đã đóng: chỉ lưu mốc.
+- 005b-7. Cấu hình close theo project: dạng `{ statusField: "Status", closedStatuses: ["Done", …] }` trong cấu hình project tạm (005b-3), chuyển vào UI ở 013/014. So theo tên option (dễ cấu hình) hay `optionId` (bền khi đổi tên)? Đề xuất tên, phân biệt hoa thường sau NFKC + trim.
 - 005b-4. Issue cũ (chỉ có mốc) có comment mới: 006 dịch cả title + body + comment mới (một lần gọi, cache lo phần trùng) hay chỉ comment? Đề xuất: cả ba (đúng mẫu "cả issue một lần gọi" của 001; title/body đã dịch thì cache trả lại). Khi đó lần đầu lấy chi tiết một issue, 005b lưu title/body làm `Content` và `ContentChanged` mang cả id của chúng, `reason` vẫn là `new_comment`. Chốt cùng 006.
 
 ## Workflow log
@@ -341,3 +380,4 @@ Không còn câu hỏi chặn 005a. Các điểm "Cần kiểm chứng" (`--inpu
 |---|---|---|
 | 1 Phân tích | 2026-11-27 | Spec draft. Đề xuất tách 005a (gateway + `github-check` + dòng `diagnose`) / 005b (poller + nhánh thật). Viết chi tiết 005a, 005b ở dạng nháp. ADR-0010 Proposed |
 | GATE 1 | 2026-11-27 | User duyệt. Tách: 005a làm trước, thư mục đổi thành `005a-github-gateway`, roadmap thêm 005b (phụ thuộc 005a, 004; 009/013 phụ thuộc 005b). Điểm dừng sau bước 1 chờ số đo `diagnose`. `GH_HOST` bắt buộc. Giữ tên/tham số `github-check`. PR chỉ đếm vào `skipped`. Không e2e. Trạng thái approved |
+| Bổ sung | 2026-11-27 | User chốt quy tắc close. 005a: `ProjectIssueStamp` thêm `state` + `status` (`fieldValueByName`), `ScanOptions.statusField`, `ProjectScan.statusField`; AC-1b; `github-check` thêm `--status-field`, `closed=`, `statusField=`, `statusSet=`, `statusOptions=`. 005b: quy tắc close, B15–B19, câu hỏi 005b-5…7. Dòng `item scan` của `diagnose` do implementer khác sửa |

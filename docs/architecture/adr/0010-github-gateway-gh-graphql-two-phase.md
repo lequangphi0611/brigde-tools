@@ -32,6 +32,7 @@ Chọn b + d + g.
 - Lỗi một phần: stdout là JSON có `data` thì dùng `data` dù mã thoát ≠ 0; node `null` → `missing`. (Cần kiểm chứng `gh` có in stdout khi có `errors` — `diagnose` dòng `gql partial`.)
 - Lỗi khác → `GitHubFailure { reason }`, không chứa stderr gốc (có thể có hostname/owner).
 - PR, draft issue, item không có quyền: bỏ qua, chỉ đếm.
+- Query quét lấy thêm `Issue.state` và giá trị field Status của item (`fieldValueByName(name: $statusField)` → `ProjectV2ItemFieldSingleSelectValue { name optionId }`; trang đầu thêm `projectV2.field(name:)` để phân biệt field không có với item chưa có giá trị). Tên field là biến, `null` thì bỏ phần này (`@include`). Adapter chỉ trả dữ liệu; quy tắc "issue đã đóng" (state CLOSED hoặc Status thuộc danh sách close của project, user chốt 2026-11-27) thuộc domain Tracking (005b). Cần kiểm chứng `fieldValueByName`/`field(name:)` trên GHES 3.20 (`diagnose` dòng `item scan`).
 - Fake: `FakeGitHub` (trong bộ nhớ, e2e) và `fake-gh.mjs` (mức process, test adapter); contract test chung.
 
 ## Hệ quả
@@ -39,4 +40,5 @@ Chọn b + d + g.
 - Board lớn hơn nhiều (vài nghìn item) làm chu kỳ chậm tuyến tính; `diagnose` dòng `item scan` và `github-check` `scanMs` cho số đo.
 - Phát hiện comment mới dựa trên giả định comment mới đẩy `Issue.updatedAt` (kiểm bằng `newerComment`). Comment bị sửa có thể không đẩy mốc → bị bỏ qua (sửa vốn không báo).
 - Phụ thuộc định dạng thông báo lỗi của `gh` để phân loại; đổi phiên bản `gh` có thể làm phân loại rơi về `process_failed` (vẫn an toàn).
+- Đổi Status trên board làm `item.updatedAt` đổi nhưng không đổi `Issue.updatedAt`; vì quét đọc Status của mọi item mỗi chu kỳ nên vẫn thấy, không cần dựa vào mốc.
 - Query nằm trong adapter, domain không thấy JSON của GitHub (ACL).
