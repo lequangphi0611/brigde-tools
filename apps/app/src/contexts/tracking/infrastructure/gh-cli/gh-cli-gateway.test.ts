@@ -66,6 +66,13 @@ describe("GhCliGateway.scanProject", () => {
     }
   });
 
+  it("thiếu scope: data projectV2 null + errors INSUFFICIENT_SCOPES + exit 1 -> scope_missing, không phải project_not_found", async () => {
+    for (const ownerType of ["org", "user"] as const) {
+      const { gw } = gateway(contractFixture(), "scope-partial");
+      await expect(gw.scanProject({ ...CONTRACT_PROJECT, ownerType }, N)).rejects.toMatchObject({ reason: "scope_missing" });
+    }
+  });
+
   it.each<[string, GitHubFailureReason]>([
     ["auth", "not_authenticated"],
     ["scope", "scope_missing"],

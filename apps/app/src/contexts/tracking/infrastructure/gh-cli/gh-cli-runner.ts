@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { GitHubFailure } from "../../../../shared/ports/github-gateway.port.ts";
+import { GitHubFailure, type GitHubFailureReason } from "../../../../shared/ports/github-gateway.port.ts";
 import { classifyGhFailure } from "./gh-failure.ts";
 
 // Chạy `gh api graphql --input -` (ADR-0010; mẫu runner an toàn của ADR-0003). Không shell, query + biến chỉ đi qua
@@ -36,6 +36,8 @@ export interface GhGraphqlResult {
   readonly data: Record<string, unknown>;
   /** Có `errors` đi kèm `data` (lỗi một phần, vd. id không còn tồn tại). */
   readonly partial: boolean;
+  /** Chỉ là mã reason (từ stderr + errors) khi partial; không chứa văn bản lỗi. Gateway dùng trước khi kết luận project_not_found. */
+  readonly failureHint?: GitHubFailureReason;
 }
 
 interface Finished {
@@ -53,7 +55,12 @@ export async function runGhCli(config: GhCliConfig, request: GhGraphqlRequest): 
   if (config.onStderr && done.stderr) config.onStderr(done.stderr);
   const parsed = parseJson(done.stdout);
   const data = dataOf(parsed);
-  if (data) return { data, partial: done.code !== 0 || hasErrors(parsed) };
+  if (data) {
+    const partial = done.code !== 0 || hasErrors(parsed);
+    const errors = isObject(parsed) && hasErrors(parsed) ? JSON.stringify(parsed.errors) : "";
+    const hint = partial ? classifyGhFailure(`${done.stderr}\n${errors}`) : null;
+    return { data, partial, ...(hint ? { failureHint: hint } : {}) };
+  }
 
   const text = `${done.stderr}\n${done.stdout}`;
   if (done.code !== 0) throw new GitHubFailure(classifyGhFailure(text) ?? "process_failed", `exit=${done.code}`);

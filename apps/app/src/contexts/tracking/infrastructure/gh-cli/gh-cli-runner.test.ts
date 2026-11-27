@@ -78,6 +78,17 @@ describe("runGhCli", () => {
     expect((r.data.nodes as unknown[])[1]).toBeNull();
   });
 
+  it("scope-partial: trả data + partial + failureHint là mã reason (không chứa văn bản lỗi)", async () => {
+    const r = await runGhCli(setup("scope-partial").config, SCAN);
+    expect(r.partial).toBe(true);
+    expect(r.failureHint).toBe("scope_missing");
+    expect(JSON.stringify(r)).not.toMatch(/granted|token/);
+  });
+
+  it("không có lỗi thì không có failureHint", async () => {
+    expect((await runGhCli(setup("ok").config, SCAN)).failureHint).toBeUndefined();
+  });
+
   it("project null (exit 0, data có null) vẫn là data hợp lệ, adapter quyết định", async () => {
     const r = await runGhCli(setup("project-null").config, SCAN);
     expect(r.data).toEqual({ organization: { projectV2: null } });

@@ -117,6 +117,7 @@ describe("github-check", () => {
     ["auth", "github:not_authenticated"],
     ["scope", "github:scope_missing"],
     ["project-null", "github:project_not_found"],
+    ["scope-partial", "github:scope_missing"],
     ["unsupported", "github:projects_v2_unsupported"],
     ["network", "github:network"],
     ["garbage", "github:bad_output"],
@@ -127,7 +128,7 @@ describe("github-check", () => {
   });
 
   it("AC-13: không in chuỗi đánh dấu ở chế độ OK và mọi chế độ lỗi", async () => {
-    for (const mode of ["ok", "auth", "scope", "project-null", "unsupported", "network", "fail", "garbage", "bad-shape"]) {
+    for (const mode of ["ok", "auth", "scope", "scope-partial", "project-null", "unsupported", "network", "fail", "garbage", "bad-shape"]) {
       const r = await run(BASE, bigFixture(), { mode });
       expect(r.out + r.err, mode).not.toContain(MARK);
     }

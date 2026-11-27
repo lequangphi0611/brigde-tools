@@ -3,7 +3,7 @@
 // Cấu hình bằng biến môi trường (adapter thật kế thừa process.env nên đi xuống được):
 //   FAKE_GH_FIXTURE  đường dẫn file JSON kiểu GitHubFixture (test-harness/github-fixture.ts)
 //   FAKE_GH_MODE     ok (mặc định) · partial (như ok; id không có trong fixture luôn trả null + errors + exit 1)
-//                    · auth · scope · project-null · not-resolved · unsupported · network · hang · fail
+//                    · auth · scope · scope-partial (data null + errors INSUFFICIENT_SCOPES, exit 1) · project-null · not-resolved · unsupported · network · hang · fail
 //                    · garbage · bad-shape · huge (FAKE_GH_HUGE_BYTES, mặc định 33 MiB)
 //   FAKE_GH_RECORD   file JSONL: mỗi lần gọi một dòng { argv, stdin, operationName, env }
 // Nhận diện query qua `operationName` trong body stdin: ScanProject · IssueDetails · IssueComments.
@@ -110,6 +110,12 @@ function page(list, cursor) {
 function scan(fixture, v, query) {
   const ownerKey = /\buser\s*\(/.test(query) && !/\borganization\s*\(/.test(query) ? "user" : "organization";
   if (mode === "project-null") return out({ [ownerKey]: { projectV2: null } });
+  if (mode === "scope-partial") {
+    // GraphQL thật khi thiếu scope: data có projectV2 null kèm errors INSUFFICIENT_SCOPES, gh thoát mã 1.
+    process.stdout.write(JSON.stringify({ data: { [ownerKey]: { projectV2: null } }, errors: [{ type: "INSUFFICIENT_SCOPES", message: "Your token has not been granted the required scopes to execute this query. The 'id' field requires one of the following scopes: ['read:project']" }] }));
+    process.stderr.write("gh: Your token has not been granted the required scopes to execute this query.\n");
+    process.exit(1);
+  }
   const withStatus = v.withStatus === true && typeof v.statusField === "string";
   const sf = fixture.statusField;
   const { nodes, pageInfo } = page(fixture.items, v.cursor);

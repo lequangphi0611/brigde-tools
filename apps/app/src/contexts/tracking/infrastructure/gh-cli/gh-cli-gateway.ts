@@ -130,15 +130,15 @@ export class GhCliGateway implements GitHubGateway {
     let pages = 0;
 
     for (;;) {
-      const { data } = await runGhCli(this.config, {
+      const { data, failureHint } = await runGhCli(this.config, {
         operationName: "ScanProject",
         query,
         variables: { owner: project.owner, number: project.number, cursor, statusField: options.statusField ?? "", withStatus },
       });
       const owner = parse(z.object({ [ownerField]: z.unknown() }), data)[ownerField];
-      if (owner === null) throw new GitHubFailure("project_not_found");
+      if (owner === null) throw new GitHubFailure(failureHint ?? "project_not_found");
       const projectData = parse(z.object({ projectV2: z.unknown() }), owner).projectV2;
-      if (projectData === null) throw new GitHubFailure("project_not_found");
+      if (projectData === null) throw new GitHubFailure(failureHint ?? "project_not_found");
       const p = parse(scanProjectSchema, projectData);
       pages++;
 
