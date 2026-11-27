@@ -10,14 +10,14 @@ import type { FakeGitHub, RecordingNotifier, ControllableClock } from "./fakes.t
 export function testHarnessRoutes(deps: { storage: Database; github: FakeGitHub; notifier: RecordingNotifier; clock: ControllableClock }) {
   const r = new Hono();
   r.post("/reset", (c) => {
-    deps.github.issues = [];
+    deps.github.reset();
     deps.notifier.sent.length = 0;
     deps.clock.reset();
     clearAllTables(deps.storage);
     return c.json({ ok: true });
   });
   r.post("/github/issues", async (c) => {
-    deps.github.issues = await c.req.json();
+    deps.github.seedIssues(await c.req.json());
     return c.json({ ok: true });
   });
   r.post("/clock", async (c) => {
