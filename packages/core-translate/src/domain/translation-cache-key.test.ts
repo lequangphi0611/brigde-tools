@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
+import type { Direction } from "./language.ts";
 import { cacheKeyString, translationCacheKey, type EngineVersion } from "./translation-cache-key.ts";
 
 const ja2vi = { from: "ja", to: "vi" } as const;
 const vi2ja = { from: "vi", to: "ja" } as const;
 const engine: EngineVersion = { promptVersion: "claude-cli/p1", configuredModel: "sonnet" };
-const str = (text: string, glossary: Array<{ ja: string; vi: string }> = [], e: EngineVersion = engine, d = ja2vi) =>
+const str = (text: string, glossary: Array<{ ja: string; vi: string }> = [], e: EngineVersion = engine, d: Direction = ja2vi) =>
   cacheKeyString(translationCacheKey(text, d, glossary, e));
 
 describe("translationCacheKey", () => {

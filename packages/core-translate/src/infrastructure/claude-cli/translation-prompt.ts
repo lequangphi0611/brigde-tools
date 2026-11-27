@@ -7,6 +7,12 @@ import type { Direction, Language } from "../../domain/language.ts";
 
 const LANGUAGE_NAME: Record<Language, string> = { ja: "Japanese", vi: "Vietnamese" };
 
+/**
+ * Phiên bản mẫu dịch, vào khoá cache (spec 003, ADR-0009). TĂNG TAY khi đổi system prompt, định dạng stdin
+ * hoặc luật che phần giữ nguyên; quên tăng thì cache cũ được dùng âm thầm.
+ */
+export const CLAUDE_CLI_PROMPT_VERSION = "claude-cli/p1";
+
 /** System prompt cố định theo chiều dịch. Không chứa nội dung segment hay hint. */
 export function translationSystemPrompt(direction: Direction, opts: { hasGlossary?: boolean } = {}): string {
   const from = LANGUAGE_NAME[direction.from];
