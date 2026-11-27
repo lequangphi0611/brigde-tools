@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { relevantTerms, type Glossary } from "../../domain/glossary.ts";
+import { mergeGlossary, relevantTerms, type Glossary } from "../../domain/glossary.ts";
 import { protect } from "../../domain/protected-spans.ts";
 import { buildTranslationStdin, neutralizeHint, translationSystemPrompt, TranslationOutputSchema } from "./translation-prompt.ts";
 
@@ -93,8 +93,8 @@ describe("glossary trong prompt (002)", () => {
   });
 
   it("AC-7 chỉ thuật ngữ liên quan, theo thứ tự glossary", () => {
-    const s = stdinOf(undefined, ["課題の担当者を決める", "よろしくお願いします"], G);
-    expect(s).toContain('<glossary>\n{"ja":"課題","vi":"issue"}\n{"ja":"担当者","vi":"người phụ trách"}\n</glossary>');
+    const s = stdinOf(undefined, ["課題の担当者を決める", "よろしくお願いします"], mergeGlossary([], G));
+    expect(s).toContain('<glossary>\n{"ja":"担当者","vi":"người phụ trách"}\n{"ja":"課題","vi":"issue"}\n</glossary>');
     expect(s).not.toContain("納品");
   });
 
