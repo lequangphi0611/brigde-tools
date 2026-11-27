@@ -1,6 +1,6 @@
 # 002 — Glossary hai tầng ghép vào prompt (bản của project thắng khi trùng)
 
-- Trạng thái: approved
+- Trạng thái: done
 - Context: Translation (`packages/core-translate`)
 - Cần UI: không
 
@@ -209,3 +209,4 @@ Không có.
 | 3 Khoá hành vi | 2026-11-27 | Bỏ qua theo câu hỏi 7 (không có hành vi người dùng thấy được; khoá ở 015/012) |
 | 4 Implement | 2026-11-27 | 2 lượt implementer, 6 commit `feat(translation)` (bước 1–7). Sửa ví dụ thứ tự AC-7 cho khớp termKey |
 | 5 Verify | 2026-11-27 | `pnpm verify` xanh: typecheck, 169 unit, e2e lock OK, e2e 1/1 |
+| 6 Review | 2026-11-27 | APPROVE, 0 must-fix. User chọn sửa 2 should-fix (va chạm glossaryVersion, thuật ngữ số khớp chỗ giữ) + 5 nit; verify lại xanh (172 unit, e2e 1/1) |

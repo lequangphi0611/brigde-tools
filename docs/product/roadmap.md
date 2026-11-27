@@ -49,7 +49,7 @@ Thiết kế phòng thủ vì không debug được trên máy thật: chỗ nà
 | # | Story | Context | UI | Cỡ | Phụ thuộc |
 |---|---|---|---|---|---|
 | 001 ✅ | Dịch ja→vi qua `ClaudeCliTranslator`, **cả issue trong một lần gọi** (title + body + comment mới; ~100s/lần trên máy thật, xem `docs/spikes/claude-cli-windows.md`), giữ nguyên code block, inline code, link, `@mention`; nội dung issue được coi là dữ liệu (khối phân cách, vô hiệu hoá thẻ giả) | Translation | – | M | S0.1 |
-| 002 | Glossary hai tầng ghép vào prompt (bản của project thắng khi trùng) | Translation | – | S | 001 |
+| 002 ✅ | Glossary hai tầng ghép vào prompt (bản của project thắng khi trùng) | Translation | – | S | 001 |
 | 003 | Cache bản dịch theo `hash + direction + glossaryVersion` (port trong core-translate, adapter ở app) | Translation | – | S | 001 |
 
 **Xong khi:** một script dịch được title + body của một issue thật trên Windows, chạy lần hai thì lấy từ cache.
