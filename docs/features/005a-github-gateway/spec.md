@@ -385,3 +385,12 @@ Không còn câu hỏi chặn 005a. Các điểm "Cần kiểm chứng" (`--inpu
 | 4 Implement bước 1 | 2026-11-27 | `40d9606`, `85b3ca9`: 4 dòng `diagnose` + đo state/Status. Typecheck + test xanh |
 | Điểm dừng | 2026-11-27 | Số đo máy thật ghi ở `docs/spikes/projects-v2-polling.md` Lần 4. Chốt: (a) `DETAIL_BATCH = 25` (lô ≈ 0,5 s); (b) query + biến qua `--input -`; (c) lỗi một phần: dùng `data` từ stdout dù exit 1, AC-6 giữ nguyên; (d) phân trang comment giữ (AC-4), `over100=0`; (e) `fieldValueByName` / `field(name:)` chạy trên GHES 3.20, quy tắc close dùng cả state lẫn Status. `newerComment=0` → làm tiếp bước 2 |
 | 4 Implement bước 2–7 | 2026-11-27 | Bước 2 `fd2fe22` (port, contract, FakeGitHub), 3 `6a083f9` (fake-gh.mjs), 4 `486b69f` (runGhCli), 5 `GhCliGateway` (DETAIL_BATCH=25, zod, projectV2 null → project_not_found), 6 `github-check`, 7 docs (diagnose.md, CLAUDE.md, rà tên cũ). ADR-0010 vẫn Proposed, chờ user duyệt cuối story. Ghi chú: `editedComment` đếm cả comment mới (updatedAt ≥ createdAt) theo đúng định nghĩa spec |
+| Review 005a | 2026-11-27 | Sửa must-fix `b2d7c0a` (thiếu scope không báo nhầm `project_not_found`: `failureHint`) và should-fix (timeout reject ngay không đợi `close`). ADR-0010 cập nhật kết quả đo, vẫn Proposed |
+
+## Finding để lại (nit, chưa sửa)
+- Regex `network` của `classifyGhFailure` rộng (`connect`, `timeout`, `proxy` …): có thể xếp nhầm lỗi khác vào `network`; vẫn an toàn (không lộ dữ liệu). Thu hẹp khi có mẫu stderr thật.
+- `GhCliGateway.detailStats` là trạng thái dùng chung của instance: hai `fetchIssueDetails` chạy song song sẽ ghi đè số đếm. 005b xử lý (trả số đếm trong kết quả hoặc dùng instance riêng) khi poller dùng gateway.
+- Contract test `github-gateway.contract.ts` nằm trong `shared/ports` nhưng import fixture từ `test-harness/`; cân nhắc dời sang `test-harness/` hoặc `testing/`.
+- Test tạo thư mục tạm (`fake-gh-*`, `gh-runner-test-*`) và không dọn.
+- Test đặt `GH_HOST` qua env của process con/`config.env`; một số chỗ dựa vào `process.env` thừa kế từ máy chạy test.
+- `github-check.process.test.ts` bị skip trên Windows (spawn không shell không chạy được shim `.cmd`); trên máy thật kiểm bằng chạy `github-check`.
