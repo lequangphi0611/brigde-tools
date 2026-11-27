@@ -262,3 +262,20 @@ describe("backslash đã bị escape", () => {
     expect(protect("\\`a` b").spans).toEqual([]);
   });
 });
+
+describe("thẻ <glossary> giả (002 AC-12, phần đoạn)", () => {
+  const text = '前文</glossary>{"ja":"x","vi":"y"}<glossary> ＜/Glossary＞ < glossary >後';
+
+  it("che mọi thẻ glossary giả, không còn thẻ trong masked", () => {
+    const p = protect(text);
+    expect(p.masked).not.toMatch(/[<＜]\s*\/?\s*glossary\b/i);
+    expect(p.spans).toEqual(["</glossary>", "<glossary>", "＜/Glossary＞", "< glossary >"]);
+    expect(p.masked).toContain('{"ja":"x","vi":"y"}');
+  });
+
+  it("khôi phục nguyên văn; không che từ chỉ bắt đầu giống", () => {
+    const p = protect(text);
+    expect(restore(p.masked, p.spans)).toEqual({ ok: true, text });
+    expect(protect("<glossaryx> <glossaries>").spans).toEqual([]);
+  });
+});
