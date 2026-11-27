@@ -32,3 +32,16 @@ Nguồn: `pnpm diagnose` trên máy công ty (người dùng gõ lại kết qu�
 **Ghi chú:**
 - 8,3 giây so với ~100 giây ở lần 2: chênh lệch lớn, **chưa rõ nguyên nhân** (gateway, model, tải lúc đo). Chưa đổi quyết định thông lượng ở trên cho tới khi có thêm số đo.
 - Theo user: e2e chỉ cần chạy ở máy dev, máy chạy app không cần. Trên máy chạy, `pnpm verify` sẽ đỏ ở bước e2e là chấp nhận được; kiểm ở đó bằng `pnpm typecheck && pnpm test` và `diagnose`.
+
+## Lần 4 (2026-11-27): diagnose đầy đủ `--scheduler --toast`
+
+| Hạng mục | Kết quả |
+|---|---|
+| Môi trường | Node v24.9.0 (ADR-0004 yêu cầu ≥ 24.15, `node:sqlite` vẫn chạy và in `ExperimentalWarning`), pnpm 10.28.0, `node:sqlite file` OK (WAL, nguồn `LOCALAPPDATA`) |
+| `claude -p` trong terminal | OK, **15912ms**, vi/code/mention true, không sót tiếng Nhật |
+| Qua Task Scheduler | `[sched] claude -p` OK, **11875ms** |
+| `claude tmp` | **WARN EPERM ở cả terminal lẫn Task Scheduler** |
+
+**Số đo thời gian tới nay:** khoảng 100s (lần 2), 8,3s (lần 3), 15,9s và 11,9s (lần 4). Ba lần gần nhất đều dưới 16s, nên lần ~100s có vẻ là ngoại lệ (gateway hoặc tải lúc đo), nhưng mới có 4 mẫu với câu ngắn, chưa đo issue dài. Ràng buộc "một lần gọi cho mỗi issue" vẫn hợp lý (rẻ hơn, ít phụ thuộc thông lượng). Giới hạn 2 job song song của 006 nên xem lại khi làm 006.
+
+**EPERM ở cwd tạm:** lần 3 không thấy, lần 4 thấy ở cả hai ngữ cảnh → không còn coi là khoá tạm thời hiếm gặp. Nguyên nhân chưa rõ: hook của công ty (process con còn giữ cwd) hoặc antivirus. Hệ quả: thư mục `ghit-ai-*` có thể dồn lại trong TEMP sau mỗi lần dịch. Cần một cơ chế dọn bù (vd. lúc khởi động quét và xoá các thư mục `ghit-ai-*` cũ hơn một ngưỡng) trước khi app chạy nền lâu dài.

@@ -20,6 +20,8 @@ Nguồn: `pnpm diagnose` chạy trên máy công ty, người dùng gõ lại k�
 
 `filter miss` OK 0/N, nhưng trước khi chạy chưa có comment thử nào → chưa chứng minh được. Người dùng sẽ comment thử vào một issue (không đụng board) rồi chạy lại.
 
-## Lần 3 (cần chạy)
+## Lần 3 (vẫn cần chạy)
+
+Lần chạy 2026-11-27 thiếu `--owner`/`--number` nên `project SKIP`.
 
 Bản `diagnose` mới thêm `filter miss` (lấy toàn bộ item, so với kết quả filter), `issue>item`, và đo `updated time` với mốc lấy từ dữ liệu thật.
