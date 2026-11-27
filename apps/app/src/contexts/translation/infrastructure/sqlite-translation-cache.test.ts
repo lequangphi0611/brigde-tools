@@ -26,7 +26,7 @@ describe("AC-15 bảng translation", () => {
 
   it("schemaVersion = 2, đúng các cột, không có cột chứa text nguồn", () => {
     const db = openAppStorage({ path: ":memory:" });
-    expect(db.schemaVersion()).toBe(2);
+    expect(db.schemaVersion()).toBe(loadMigrations().length);
     const cols = (db.raw.prepare("PRAGMA table_info(translation)").all() as Array<{ name: string }>).map((c) => c.name);
     expect(cols).toEqual(["source_hash", "direction", "glossary_version", "prompt_version", "configured_model", "text", "model", "created_at"]);
   });
@@ -52,7 +52,7 @@ describe("AC-15 bảng translation", () => {
     const db = openDatabase(":memory:");
     const all = loadMigrations();
     expect(runMigrations(db, all.slice(0, 1))).toEqual([1]);
-    expect(runMigrations(db, all)).toEqual([2]);
-    expect(db.schemaVersion()).toBe(2);
+    expect(runMigrations(db, all)).toEqual(all.slice(1).map((m) => m.number));
+    expect(db.schemaVersion()).toBe(loadMigrations().length);
   });
 });
