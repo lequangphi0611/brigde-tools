@@ -18,7 +18,7 @@ Là người dùng có máy công ty chạy được `claude -p` nhưng chưa c�
 pnpm translate-issue <file.json> [--config <path>] [--out <file>]
 pnpm translate-issue --help
 ```
-- `<file.json>` là đường dẫn tuyệt đối hoặc tương đối. Đường dẫn tương đối tính theo **thư mục người dùng đứng khi gõ lệnh**, không theo thư mục mà pnpm chuyển vào: `pnpm --filter` chạy trong `apps/app`, nhưng biến `INIT_CWD` vẫn giữ thư mục gốc. Implementer chọn cách chạy, chỉ cần thoả AC-8. Một `--` đứng riêng trong argv bị bỏ qua, vì tuỳ phiên bản pnpm có thể chuyển nó tiếp vào script (Cần kiểm chứng trên pnpm 10.28 của máy thật).
+- `<file.json>` là đường dẫn tuyệt đối hoặc tương đối. Đường dẫn tương đối tính theo **thư mục người dùng đứng khi gõ lệnh**, không theo thư mục mà pnpm chuyển vào: `pnpm --filter` chạy trong `apps/app`, nhưng biến `INIT_CWD` vẫn giữ thư mục gốc. **Cách chạy đã chốt:** root script `translate-issue` = `tsx apps/app/src/cli/translate-issue/main.ts` (không dùng `pnpm --filter`, vì pnpm lồng ghi đè `INIT_CWD` thành thư mục gốc repo; `tsx` là devDependency của root). Người dùng gõ `pnpm -s translate-issue …` để pnpm không in banner `> …` (chứa đường dẫn tuyệt đối và argv) ra stdout. Một `--` đứng riêng trong argv bị bỏ qua, vì tuỳ phiên bản pnpm có thể chuyển nó tiếp vào script (Cần kiểm chứng trên pnpm 10.28 của máy thật).
 - `--config` mặc định là `<repo>/config/claude-cli.local.json`, trùng mặc định của `diagnose`, nên file đã chạy được ở M0 dùng được luôn (đã chốt ở GATE 1).
 - `--out <file>`: ghi bản dịch ra file UTF-8 có BOM (Notepad và `Get-Content` của PowerShell 5.1 đọc đúng). Khi đó stdout chỉ còn dòng trạng thái. File đã có thì ghi đè.
 - Lệnh luôn dùng adapter thật, không đọc `APP_ADAPTERS`. Test thay Claude CLI bằng cách trỏ `--config` tới file cấu hình gọi `fake-claude-cli.mjs` (giống `caching-claude-cli.test.ts`).
@@ -141,7 +141,9 @@ Scenario: AC-9 Engine lỗi: báo mã, không lộ stderr, không ghi cache
   And stdout không có bản dịch, toàn bộ output không chứa "not logged in"
   And bảng translation rỗng; chạy lại với mode "ok" thì engine=called
   Given fake CLI ở mode "garbage"
-  Then dòng cuối có "FAIL translate:bad_output detail=invalid_schema"
+  Then dòng cuối có "FAIL translate:bad_output" (không có detail: lỗi ở runner, không phải schema)
+  Given fake CLI ở mode "batch-missing"
+  Then dòng cuối có "FAIL translate:bad_output detail=missing_segment"
   Given cấu hình maxInputChars = 100 và body tiếng Nhật 500 ký tự trong một đoạn
   Then exit 1, "FAIL translate:input_too_large", không gọi fake CLI
 
@@ -240,3 +242,4 @@ Không có.
 | GATE 1 | 2026-11-27 | User duyệt. Chốt: không nhận glossary (`glossary: []`, nguồn thật ở 015); cấu hình CLI mặc định `<repo>/config/claude-cli.local.json` + `--config`; không e2e, khoá bằng Vitest + `fake-claude-cli.mjs`; cắt AC giữ cỡ S (bỏ đổi model và cache lỗi vì đã phủ ở 003, lỗi lưu trữ chỉ giữ `open_failed`, `input_too_large` gộp vào AC lỗi engine, AC đoạn rỗng và đường dẫn tương đối mỗi cái một test), còn 14 AC; được thêm `pnpm translate-issue` vào CLAUDE.md. Trạng thái approved |
 | 4 Implement, lượt 1 | 2026-11-27 | Xong bước 1–3 (issue-input, status-line + dataDirSource, buildRealTranslator trong composition-root); unit xanh, typecheck xanh. Còn bước 4–6 |
 | 4 Implement, lượt 2 | 2026-11-27 | Xong bước 4–6: `run-translate-issue.ts` (+ test trong process), `main.ts`, script `translate-issue` ở root (thêm `tsx` vào devDependencies của root để giữ `INIT_CWD`), test spawn mức process, docs (diagnose.md, CLAUDE.md). Lệch spec: AC-9 `garbage` không cho `detail=invalid_schema` (xem báo cáo) |
+| Review vòng 1 | 2026-11-27 | APPROVE. Sửa: AC-9 theo hành vi thật của fake CLI; ghi cách chạy bằng root script; docs dùng `pnpm -s`, phải đứng trong repo; `main` bọc `runTranslateIssueSafely` (FAIL internal); đồng bộ range `tsx` ^4.23.15; bỏ `!` ở `output_write` |

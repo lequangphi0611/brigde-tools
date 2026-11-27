@@ -53,10 +53,10 @@ Kiểm lõi dịch M1 (`claude -p` + cache SQLite) trên một issue thật mà 
    cmd /c "gh issue view <số> --repo <owner/repo> --json title,body > issue.json"
    ```
    Ghi chú: file do `>`/`Out-File` của PowerShell (UTF-8 có BOM, UTF-16LE) vẫn đọc được, nhưng nếu tiếng Nhật đã hỏng thì script không cứu được.
-2. Chạy (ở thư mục có `issue.json`, đường dẫn tương đối tính theo thư mục đang đứng):
+2. Chạy bằng `pnpm -s` (`-s` tắt banner `> …` mà pnpm in ra stdout, có đường dẫn tuyệt đối và tên file; nếu quên `-s` thì **không gõ lại các dòng `>` đó**). Phải đứng trong thư mục repo (thư mục gốc, hoặc thư mục con không có `package.json` riêng); không chạy từ `apps/app`. Đường dẫn tương đối tính theo thư mục đang đứng; file ở ngoài repo thì truyền đường dẫn tuyệt đối.
    ```
-   pnpm translate-issue issue.json
-   pnpm translate-issue issue.json --config <path> --out vi.txt
+   pnpm -s translate-issue issue.json
+   pnpm -s translate-issue issue.json --config <path> --out vi.txt
    ```
    `--config` mặc định `config/claude-cli.local.json` (cùng file `diagnose` dùng). `--out` ghi bản dịch ra file UTF-8 có BOM, khi đó màn hình chỉ có dòng trạng thái. Chạy lại lần hai để thấy cache.
 3. Dòng cuối là **dòng trạng thái**, chỉ gồm mã, số đếm và thời gian. **Chỉ gõ lại dòng này** cho Claude; đừng gửi bản dịch hay đường dẫn.
