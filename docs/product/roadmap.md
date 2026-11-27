@@ -66,11 +66,12 @@ Lần đầu tiên dùng thật được. Project cấu hình cứng trong file 
 | # | Story | Context | UI | Cỡ | Phụ thuộc |
 |---|---|---|---|---|---|
 | 004 ✅ | Lưu trữ SQLite + migration + bảng `setting` | hạ tầng | – | S | ADR-0004 |
-| 005 | Poller một project: phát hiện issue mới và comment mới theo `Issue.updatedAt`; lần đầu chỉ lấy mốc thời gian; issue bị sửa thì dịch lại nhưng không báo. Có `GhCliGateway` + fake `gh` ở mức process. Lắp storage thật (`openAppStorage` + `dataDir`) vào nhánh adapter thật; dòng lỗi `StorageError` của `main.ts` có đường dẫn DB, tách hàm format có unit test (dời từ review 004) | Tracking | – | M | S0.2, 004 |
+| 005a | (Tách từ 005 ở GATE 1, 2026-11-27) Adapter GitHub: port `GitHubGateway` hai pha (quét toàn bộ board theo `Issue.updatedAt` + lấy chi tiết kèm comment theo lô), `GhCliGateway` + fake `gh` mức process, contract test với `FakeGitHub`; 4 dòng đo mới trong `diagnose`; lệnh `pnpm -s github-check` chỉ in mã và số đếm. ADR-0010 | Tracking | – | M | S0.2 |
+| 005b | (Tách từ 005) Poller một project: phát hiện issue mới và comment mới theo `Issue.updatedAt` (so mốc từng issue); lần đầu chỉ lấy mốc thời gian; issue bị sửa thì phát `ContentChanged(edited)` để dịch lại nhưng không báo. Lắp storage thật (`openAppStorage` + `dataDir`), `buildRealTranslator`, `GhCliGateway` vào nhánh adapter thật; dòng lỗi `StorageError` của `main.ts` có đường dẫn DB (dòng riêng), tách hàm format có unit test (dời từ review 004). Nháp ở `docs/features/005a-github-gateway/spec.md` mục "Phần sau: 005b" | Tracking | – | M | 005a, 004 |
 | 006 | Hàng đợi dịch bền (bảng `job`): tối đa 2 job song song (≈70 lần gọi/giờ), gộp các comment mới của cùng issue vào một job, retry có giới hạn, ưu tiên mục liên quan tới tôi, job dở được chạy lại sau khi restart | Translation | – | M | 003, 004 |
 | 007 | Toast khi bản dịch đã sẵn (issue mới), title tiếng Việt, bấm mở đúng issue | Notification | – | S | 006, ADR-0005 |
 | 008 | Trang issue: tiếng Việt và tiếng Nhật song song, có link sang GitHub, trạng thái "đang dịch" và "dịch lỗi" | Tracking | có | M | 006 |
-| 009 | Trang tình trạng tối thiểu: gh đã đăng nhập chưa, Claude CLI đã cấu hình chưa, lần poll cuối, số job lỗi; ghi log ra file local | vận hành | có | S | 005, 006 |
+| 009 | Trang tình trạng tối thiểu: gh đã đăng nhập chưa, Claude CLI đã cấu hình chưa, lần poll cuối, số job lỗi; ghi log ra file local | vận hành | có | S | 005b, 006 |
 
 **Xong khi (cổng dùng thật):** chạy trên máy thật ít nhất vài ngày với một project. Ghi lại lỗi gặp phải thành story mới hoặc sửa thứ tự các mốc sau.
 
@@ -90,7 +91,7 @@ Lần đầu tiên dùng thật được. Project cấu hình cứng trong file 
 
 | # | Story | Context | UI | Cỡ | Phụ thuộc |
 |---|---|---|---|---|---|
-| 013 | Thêm project bằng URL (`orgs/…` hoặc `users/…`): kiểm quyền truy cập, lấy tên project và danh sách repo | Tracking | có | M | 005 |
+| 013 | Thêm project bằng URL (`orgs/…` hoặc `users/…`): kiểm quyền truy cập, lấy tên project và danh sách repo | Tracking | có | M | 005b |
 | 014 | Quy tắc thông báo theo project (issue mới / assign hoặc mention tôi / comment mới) và chu kỳ poll; phát hiện assign/mention | Notification | có | M | 007, 013 |
 | 015 | Quản lý glossary: chung và riêng từng project | Translation | có | S | 002 |
 | 016 | Xoá project (dữ liệu và job liên quan) | Tracking | có | S | 013 |
@@ -136,5 +137,5 @@ Không nên cắt: 011 "Dịch ngay" (thiếu nó thì issue cũ không bao gi�
 
 ## Cách dùng với workflow
 
-- Làm một story: `/feature <số story>`, ví dụ `/feature 005`. Orchestrator lấy mô tả ở bảng trên làm user story đầu vào, `analyst` mở rộng thành spec `docs/features/005-…/spec.md`.
+- Làm một story: `/feature <số story>`, ví dụ `/feature 005b`. Orchestrator lấy mô tả ở bảng trên làm user story đầu vào, `analyst` mở rộng thành spec `docs/features/005b-…/spec.md`.
 - Xong story thì đánh dấu ở đây (thêm ✅ vào cột #). Story mới phát sinh thì thêm vào mốc phù hợp với số tiếp theo.

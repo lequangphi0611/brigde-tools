@@ -26,9 +26,16 @@
 | `ProjectResumed` | Listen lại project | Notification (summary toast) |
 
 ## Ports
-- `GitHubGateway.fetchUpdatedIssues(project, since)` — một GraphQL query/project/chu kỳ, lọc trùng phía client theo `Issue.updatedAt > lastSeen`.
+- `GitHubGateway` (story 005a, ADR-0010 Proposed; thay `fetchUpdatedIssues(project, since)`):
+  - `scanProject(project): ProjectScan` — phân trang **toàn bộ** item của board (≈3 trang với ~286 item), mỗi Issue chỉ lấy `nodeId` + `Issue.updatedAt` (`ProjectIssueStamp`); PR, draft issue, item không có quyền chỉ đếm (`skipped`).
+  - `fetchIssueDetails(nodeIds): IssueDetails` — chi tiết theo lô (title, body, repo, number, url, assignees, **mọi** comment sắp theo `createdAt`); id không còn đọc được vào `missing`, không làm hỏng cả lô.
+  - Lỗi: `GitHubFailure { reason }` (`gh_not_found` / `not_authenticated` / `scope_missing` / `project_not_found` / `projects_v2_unsupported` / `network` / `timeout` / `process_failed` / `bad_output`), không chứa owner/hostname/nội dung.
+  - Adapter thật `GhCliGateway` (`contexts/tracking/infrastructure/gh-cli/`): `gh api graphql --input -`, không shell, biến GraphQL qua stdin; fake mức process `fake-gh.mjs`; fake trong bộ nhớ `FakeGitHub`. Hai adapter chạy chung contract test.
 - `Clock`.
 
 ## Quy tắc kỹ thuật đã biết (từ spike/thiết kế)
 - Projects v2 không sort theo thời gian phía server → phân trang hết rồi sort phía client.
 - Không dùng `item.updatedAt` (không rõ có đổi khi có comment).
+- Filter `items(query: "updated:…")` không được làm nguồn duy nhất (spike S0.2: 2/286 item có `Issue.updatedAt` mới hơn `item.updatedAt`; server chỉ hiểu mức ngày) → quét toàn bộ board mỗi chu kỳ, so `Issue.updatedAt` phía client. GHES tắt rate limit.
+- (Định hướng cho 005b, chốt khi phân tích 005b) So mốc theo **từng issue** (`Issue.ghUpdatedAt` đã lưu) thay vì chỉ một `lastSeen` của project: `nodeId` chưa biết = issue mới trên board kể cả khi `Issue.updatedAt` cũ (issue cũ vừa được kéo vào board); `lastSeen` vẫn giữ = max đã xử lý.
+- Giả định cần kiểm (`diagnose` dòng `comments`, `github-check` trường `newerComment`): comment mới làm `Issue.updatedAt` đổi. Sửa comment có thể không đổi (`editedComment`) → không thấy được comment bị sửa; chấp nhận vì sửa không báo.

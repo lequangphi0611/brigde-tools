@@ -10,6 +10,11 @@ Khi story đưa thêm khái niệm, `analyst` thêm vào đây TRƯỚC khi impl
 | Nội dung | `Content` | Tracking | Một đoạn cần dịch: title, body hoặc một comment (`kind`) |
 | Mốc đã thấy | `lastSeen` | Tracking | `Issue.updatedAt` lớn nhất đã xử lý. Luôn là của Issue, KHÔNG phải của project item |
 | Chu kỳ poll | `PollCycle` | Tracking | Một lần quét một project tìm thay đổi |
+| Lần quét board | `ProjectScan` | Tracking | Kết quả `GitHubGateway.scanProject`: mọi Issue trên board (`ProjectIssueStamp`), số item bị bỏ qua (PR, draft, không có quyền), số trang (story 005a) |
+| Mốc của issue trên board | `ProjectIssueStamp` | Tracking | `{ nodeId, updatedAt }` với `updatedAt` = `Issue.updatedAt`, không phải của project item |
+| Chi tiết issue | `IssueDetails` | Tracking | Kết quả `GitHubGateway.fetchIssueDetails`: `GitHubIssueSnapshot` (kèm mọi comment) + `missing` (id không còn đọc được) |
+| Lỗi GitHub | `GitHubFailure` | Tracking | Lỗi của port `GitHubGateway`: `reason` = `gh_not_found` / `not_authenticated` / `scope_missing` / `project_not_found` / `projects_v2_unsupported` / `network` / `timeout` / `process_failed` / `bad_output`; không chứa owner, hostname, id hay nội dung |
+| Adapter gh | `GhCliGateway` | Tracking | Adapter thật của `GitHubGateway`: gọi `gh api graphql` qua `runGhCli` (không shell, query + biến qua stdin), ADR-0010 |
 | Listen / Unlisten | `ListenState` | Tracking | Theo dõi hay không. Unlisten = dừng cả dịch lẫn báo |
 | Kế thừa listen | `listening: null` | Tracking | Issue không đặt riêng → theo project |
 | Tạm dừng toàn cục | `pausedUntil` | Notification | Chỉ tắt toast, vẫn poll và dịch |
