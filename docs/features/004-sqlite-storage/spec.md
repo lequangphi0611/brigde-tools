@@ -1,6 +1,6 @@
 # 004 — Lưu trữ SQLite + migration + bảng `setting`
 
-- Trạng thái: draft
+- Trạng thái: approved
 - Context: hạ tầng dùng chung (`apps/app/src/shared`), phục vụ Tracking / Translation / Notification
 - Cần UI: không
 
@@ -14,15 +14,15 @@ Là người dùng chạy app nền trên máy Windows công ty, tôi muốn tr�
   - Migration `0001-setting.sql` (bảng `setting`), port `SettingStore` và adapter SQLite.
   - Xác định **thư mục dữ liệu** (`dataDir`) trên Windows và nơi khác (ADR-0008).
   - Lắp vào composition root: chế độ fake dùng SQLite `:memory:`, `/__test__/reset` xoá dữ liệu.
-  - Chỉ tắt `ExperimentalWarning` của SQLite.
+  - Chỉ tắt `ExperimentalWarning` của SQLite, **có điều kiện**: chỉ làm nếu Node mục tiêu (≥ 24.15) còn phát cảnh báo đó (kiểm ở bước 1 của kế hoạch).
   - Bổ sung `pnpm diagnose`: kiểm WAL trên **file** thật trong `dataDir` (dòng `node:sqlite` hiện tại chỉ kiểm `:memory:`, mà `:memory:` luôn trả `journal_mode=memory` nên chưa kiểm được WAL).
-- **Không:** bảng của 003 (cache), 005 (project, issue, `lastSeen`), 006 (`job`): mỗi story tự thêm migration của mình. Chưa có bên nào đọc/ghi `setting` trong app (bên dùng đầu tiên dự kiến là 017 `pausedUntil`). Nhánh adapter thật của composition root vẫn `throw` như hiện tại (xem Câu hỏi mở 4).
+- **Không:** bảng của 003 (cache), 005 (project, issue, `lastSeen`), 006 (`job`): mỗi story tự thêm migration của mình. Chưa có bên nào đọc/ghi `setting` trong app (bên dùng đầu tiên dự kiến là 017 `pausedUntil`). Nhánh adapter thật của composition root vẫn `throw` như hiện tại; 005 là story lắp storage thật (`openAppStorage` với `dataDir`). Thử lại khi gặp lỗi khoá tạm thời lúc khởi động: để sau (xem Ngoài phạm vi).
 
 ### Những gì 003 và 006 sẽ cần từ tầng này (để thiết kế đúng ngay, không làm bảng)
 | Story | Cần | 004 cung cấp |
 |---|---|---|
 | 003 cache (`hash + direction + glossaryVersion`) | Khoá chính ghép, `INSERT … ON CONFLICT`, text Nhật/Việt giữ nguyên byte. Port `TranslationCache` trong `core-translate`, adapter trong app | Handle DB dùng chung cho adapter ở app; quy ước migration và tên bảng; test round-trip Unicode (AC-8) |
-| 006 `job` bền | Claim job trong transaction (`BEGIN IMMEDIATE`, `UPDATE … RETURNING`), phục hồi job `running` khi khởi động, thời gian retry theo `Clock` | `transaction(fn)` (AC-12), `busy_timeout`, migration chạy **trước** khi server/hàng đợi bắt đầu, quy ước thời gian ISO từ `Clock` (ADR-0008) |
+| 006 `job` bền | Claim job trong transaction (`BEGIN IMMEDIATE`, `UPDATE … RETURNING`), phục hồi job `running` khi khởi động, thời gian retry theo `Clock` | `transaction(fn)` (AC-11), `busy_timeout`, migration chạy **trước** khi server/hàng đợi bắt đầu, quy ước thời gian ISO từ `Clock` (ADR-0008) |
 | 005 `lastSeen` | Bền qua restart | AC-9 kiểm bền qua đóng/mở lại |
 
 ## Thiết kế đề xuất (để AC có nghĩa cụ thể)
@@ -48,7 +48,7 @@ Là người dùng chạy app nền trên máy Windows công ty, tôi muốn tr�
 - Mỗi migration N (V < N ≤ M, tăng dần): `BEGIN IMMEDIATE` → nội dung file → `PRAGMA user_version = N` → `COMMIT`. Lỗi → `ROLLBACK` (trong `node:sqlite`, `exec` lỗi giữa chừng để transaction còn mở, phải rollback tường minh) → `StorageError("migration_failed", migration: N)`; migration < N đã commit được giữ. Đã thử trong container: `PRAGMA user_version` trong transaction bị rollback cùng transaction.
 - Quy ước: file migration không chứa `BEGIN`/`COMMIT` của transaction; file đã merge thì không sửa (ADR-0008).
 
-**Khởi động** `openAppStorage({ path })`: tạo `dataDir` nếu chưa có (đệ quy) → `openDatabase` → chạy migration. Lỗi tạm thời (mã chính `errcode & 0xff` là `SQLITE_BUSY` 5, `SQLITE_LOCKED` 6, `SQLITE_IOERR` 10, `SQLITE_CANTOPEN` 14, hoặc `EPERM`/`EBUSY` khi tạo thư mục) → thử lại tối đa 3 lần, chờ 500 ms × số lần (hàm chờ được tiêm để test). `corrupt`, `invalid_migrations`, `schema_too_new`, lỗi SQL của migration → không thử lại. Hết lượt → ném lỗi cuối. `main.ts` bắt `StorageError`, in **một dòng** ra stderr (`[storage] <reason> …`, có đường dẫn DB) và thoát mã 1 trước khi mở cổng HTTP.
+**Khởi động** `openAppStorage({ path })`: tạo `dataDir` nếu chưa có (đệ quy) → `openDatabase` → chạy migration. Không thử lại: lỗi nào cũng ném ngay (lỗi mở file không phải hỏng → `StorageError("open_failed")` kèm `sqliteCode`). `main.ts` bắt `StorageError`, in **một dòng** ra stderr (`[storage] <reason> …`, có đường dẫn DB) và thoát mã 1 trước khi mở cổng HTTP. App dừng chứ không tự sửa; story 009 (trang tình trạng + log file) sẽ là nơi hiển thị lỗi này cho người dùng.
 
 **Bảng `setting`** (`0001-setting.sql`): `CREATE TABLE setting (key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL) STRICT;`
 
@@ -58,7 +58,7 @@ Là người dùng chạy app nền trên máy Windows công ty, tôi muốn tr�
 
 **Composition root**: `Deps` thêm `settings: SettingStore` (và handle storage để đóng khi tắt). `APP_ADAPTERS=fake` → `openAppStorage({ path: ":memory:" })`, không đụng tới `dataDir`. `harness` thêm `storage`; `POST /__test__/reset` xoá mọi hàng của mọi bảng người dùng (bảng không bắt đầu bằng `sqlite_`), giữ schema và `user_version`, tạm tắt kiểm khoá ngoại trong lúc xoá. Không thêm endpoint harness mới.
 
-**ExperimentalWarning**: trước khi nạp `node:sqlite` lần đầu, lọc riêng cảnh báo `ExperimentalWarning` có message chứa `SQLite`; mọi cảnh báo khác vẫn in. Cảnh báo phát ra khi **nạp module**, nên module SQLite phải được nạp sau bộ lọc (vd `process.getBuiltinModule("node:sqlite")` như `diagnose`, hoặc import động), không qua import tĩnh bị hoist lên trước.
+**ExperimentalWarning** (có điều kiện, xem AC-13): trước khi nạp `node:sqlite` lần đầu, lọc riêng cảnh báo `ExperimentalWarning` có message chứa `SQLite`; mọi cảnh báo khác vẫn in. Cảnh báo phát ra khi **nạp module**, nên module SQLite phải được nạp sau bộ lọc (vd `process.getBuiltinModule("node:sqlite")` như `diagnose`, hoặc import động), không qua import tĩnh bị hoist lên trước.
 
 ## Acceptance criteria
 
@@ -136,16 +136,7 @@ Scenario: AC-10 Vị trí thư mục dữ liệu
   And trên linux với XDG_DATA_HOME = "/x" trả "/x/gh-issue-translator", không có thì "<homedir>/.local/share/gh-issue-translator"
   And không bao giờ trả đường dẫn nằm trong thư mục repo hay cwd
 
-Scenario: AC-11 Lỗi tạm thời khi khởi động được thử lại có giới hạn
-  Given trình mở DB giả ném lỗi SQLite errcode 5 (BUSY) ở lần 1 và errcode 14 (CANTOPEN) ở lần 2, lần 3 thành công
-  When gọi openAppStorage với hàm chờ giả
-  Then mở thành công, hàm chờ được gọi 2 lần với 500 ms rồi 1000 ms
-  Given trình mở giả luôn ném errcode 10 (IOERR, kể cả mã mở rộng như 5898)
-  Then sau đúng 3 lần thử ném StorageError reason "open_failed" có sqliteCode
-  Given lỗi là corrupt, invalid_migrations, schema_too_new hoặc lỗi SQL của migration
-  Then không thử lại (trình mở chỉ được gọi 1 lần)
-
-Scenario: AC-12 transaction(fn)
+Scenario: AC-11 transaction(fn)
   Given handle DB đã migrate
   When transaction(fn) với fn ghi hai hàng setting rồi trả về giá trị v
   Then cả hai hàng được lưu và transaction trả v
@@ -154,19 +145,19 @@ Scenario: AC-12 transaction(fn)
   When gọi transaction lồng trong fn của transaction khác
   Then ném Error, transaction ngoài bị rollback
 
-Scenario: AC-13 Chế độ fake dùng SQLite trong bộ nhớ và reset sạch dữ liệu
+Scenario: AC-12 Chế độ fake dùng SQLite trong bộ nhớ và reset sạch dữ liệu
   Given app tạo bằng createApp(buildDeps("fake")) với APP_DATA_DIR trỏ tới thư mục tạm rỗng
   Then deps.settings dùng được ngay (schema đã migrate) và thư mục tạm vẫn rỗng (không file DB nào được tạo)
   When set("notification.pausedUntil", "X") rồi gọi POST /__test__/reset
   Then get("notification.pausedUntil") = null, bảng setting vẫn tồn tại, schemaVersion không đổi
   And hai lần buildDeps("fake") cho hai DB độc lập
 
-Scenario: AC-14 Chỉ tắt ExperimentalWarning của SQLite
+Scenario: AC-13 Chỉ tắt ExperimentalWarning của SQLite (có điều kiện: chỉ giữ nếu Node mục tiêu ≥ 24.15 còn phát cảnh báo này)
   Given một process Node con nạp module storage, mở DB ":memory:", rồi tự phát process.emitWarning("x", "ExperimentalWarning")
   Then stderr không chứa "SQLite is an experimental feature"
   And stderr vẫn chứa cảnh báo ExperimentalWarning "x"
 
-Scenario: AC-15 diagnose kiểm WAL trên file trong thư mục dữ liệu
+Scenario: AC-14 diagnose kiểm WAL trên file trong thư mục dữ liệu
   Given chạy pnpm diagnose (không tham số) trên máy có node:sqlite
   Then có dòng "node:sqlite file" với OK khi: tạo được thư mục dữ liệu, tạo file DB tạm trong đó, journal_mode trả "wal", ghi rồi đọc lại được chuỗi Nhật/Việt, đóng và xoá được file DB tạm cùng "-wal"/"-shm"
   And bước nào lỗi thì FAIL kèm tên bước và mã lỗi (vd "EPERM", "SQLITE_CANTOPEN"), xoá không được thì WARN kèm mã lỗi
@@ -186,13 +177,12 @@ Scenario: AC-15 diagnose kiểm WAL trên file trong thư mục dữ liệu
 | AC-8 | integration (`:memory:`) | `apps/app/src/shared/infrastructure/sqlite/sqlite-setting-store.test.ts` |
 | AC-9 | integration (file tạm) | `apps/app/src/shared/infrastructure/sqlite/sqlite-setting-store.test.ts` |
 | AC-10 | unit | `apps/app/src/shared/infrastructure/data-dir.test.ts` |
-| AC-11 | unit (trình mở + hàm chờ giả) | `apps/app/src/shared/infrastructure/sqlite/app-storage.test.ts` |
-| AC-12 | integration (`:memory:`) | `apps/app/src/shared/infrastructure/sqlite/open-database.test.ts` |
-| AC-13 | integration (Hono `app.request`, không Playwright) | `apps/app/src/composition-root.test.ts` |
-| AC-14 | integration (process con) | `apps/app/src/shared/infrastructure/sqlite/sqlite-warning.test.ts` |
-| AC-15 | unit cho phần thuần trong `checks.mjs` + chạy tay trên máy thật | `scripts/diagnose/checks.test.ts` |
+| AC-11 | integration (`:memory:`) | `apps/app/src/shared/infrastructure/sqlite/open-database.test.ts` |
+| AC-12 | integration (Hono `app.request`, không Playwright) | `apps/app/src/composition-root.test.ts` |
+| AC-13 | integration (process con), **có điều kiện** (bước 1) | `apps/app/src/shared/infrastructure/sqlite/sqlite-warning.test.ts` |
+| AC-14 | unit cho phần thuần trong `checks.mjs` + chạy tay trên máy thật | `scripts/diagnose/checks.test.ts` |
 
-**Không có e2e mới cho 004.** Lý do:
+**Không có e2e mới cho 004 → bước 3 của workflow (`e2e-writer` + `pnpm e2e:lock`) được bỏ qua.** `e2e/specs/` và `e2e/specs.lock.json` không đổi. Lý do:
 - Story không có UI, không có hành vi người dùng nào nhìn thấy được qua trình duyệt. `e2e/specs/` là hợp đồng hành vi người dùng; khoá một spec không có gì để người dùng thấy chỉ thêm chi phí re-lock.
 - "Khởi động lại vẫn giữ setting" cần dừng/chạy lại process app; Playwright `webServer` do config quản lý, không restart được giữa test, và chế độ fake dùng `:memory:` (ADR-0008) nên restart vốn mất dữ liệu. Tính bền được khoá ở AC-9 (đóng/mở lại cùng file), là đúng tầng.
 - Spec `smoke.spec.ts` hiện có vẫn chạy trong `pnpm verify` và chứng minh app fake khởi động được với storage + migration (webServer chờ `/api/health`). Không sửa spec đó.
@@ -202,7 +192,7 @@ Scenario: AC-15 diagnose kiểm WAL trên file trong thư mục dữ liệu
 - Thuật ngữ mới (→ `ubiquitous-language.md`, đã thêm): **Cài đặt** `Setting` / `SettingStore`; **Thư mục dữ liệu** `dataDir`; **Migration** `Migration`; **Phiên bản schema** `schemaVersion`; **Lỗi lưu trữ** `StorageError`.
 - Aggregate / invariant / event thay đổi: không có aggregate hay event mới. Invariant hạ tầng: `schemaVersion` chỉ tăng, bằng số migration cuối đã commit; app không chạy với `schemaVersion` lớn hơn migration nó biết. `GlobalPause` (Notification) sẽ lưu qua `SettingStore` khoá `notification.pausedUntil` (ghi chú trong `bounded-contexts/notification.md`, implement ở 017).
 - Port mới: `SettingStore` (`apps/app/src/shared/ports/setting-store.port.ts`). `Deps` thêm `settings`.
-- ADR cần viết: ADR-0008 (Proposed) — `dataDir`, một chuỗi migration toàn app, thời gian ISO từ `Clock`, SQLite thật `:memory:` trong chế độ fake thay cho repository fake, `shared/infrastructure`, dừng khi DB hỏng.
+- ADR cần viết: ADR-0008 (Accepted 2026-11-27) — `dataDir`, một chuỗi migration toàn app, thời gian ISO từ `Clock`, SQLite thật `:memory:` trong chế độ fake thay cho repository fake, `shared/infrastructure`, dừng khi DB hỏng.
 
 ## UI (nếu có)
 Không có.
@@ -211,41 +201,46 @@ Không có.
 - Bảng của 003, 005, 006 và mọi repository của context.
 - Bên đọc/ghi `setting` trong app (017), API HTTP cho setting.
 - Hiển thị lỗi lưu trữ trên trang tình trạng, log ra file (009). 004 chỉ in một dòng stderr và thoát mã 1.
+- **Thử lại khi gặp lỗi khoá tạm thời lúc khởi động** (BUSY/LOCKED/IOERR/CANTOPEN, EPERM/EBUSY): để sau. Chưa có bằng chứng DB bị khoá trên máy thật (EPERM ở S0.1 là xoá thư mục tạm, không phải SQLite). Đợi số liệu từ dòng `diagnose` `node:sqlite file` (AC-14); có lỗi khoá thì thêm story riêng.
 - Sao lưu, `VACUUM`, xoay vòng file, xuất/nhập dữ liệu.
 - Checksum phát hiện migration đã áp dụng bị sửa; migration "down".
 - Chỉ một instance (020). Migration dùng `BEGIN IMMEDIATE` + `busy_timeout` nên hai process cùng khởi động không làm hỏng schema, nhưng không chặn instance thứ hai.
-- Nhánh adapter thật của `buildDeps` (vẫn `throw`, xem Câu hỏi mở 4).
+- Nhánh adapter thật của `buildDeps` (vẫn `throw`; 005 lắp storage thật).
 
 ## Rủi ro và điểm cần kiểm chứng
-- **Cần kiểm chứng: Vitest/Vite resolve `node:sqlite`.** `node:sqlite` là builtin chỉ có dạng tiền tố `node:` (như `node:test`); một số bản Vite/Vitest từng không nhận ra và báo không tìm thấy module. Cách kiểm: bước 1 của kế hoạch là một test chỉ nạp `node:sqlite` và chạy `SELECT sqlite_version()` dưới `pnpm test` và dưới `tsx`. Nếu lỗi: nạp bằng `process.getBuiltinModule("node:sqlite")` (Node ≥ 22.3, đúng cách `diagnose` đang làm) — cách này cũng cần cho AC-14.
+- **Cần kiểm chứng: Vitest/Vite resolve `node:sqlite`.** `node:sqlite` là builtin chỉ có dạng tiền tố `node:` (như `node:test`); một số bản Vite/Vitest từng không nhận ra và báo không tìm thấy module. Cách kiểm: bước 1 của kế hoạch là một test chỉ nạp `node:sqlite` và chạy `SELECT sqlite_version()` dưới `pnpm test` và dưới `tsx`. Nếu lỗi: nạp bằng `process.getBuiltinModule("node:sqlite")` (Node ≥ 22.3, đúng cách `diagnose` đang làm) — cách này cũng cần cho AC-13 nếu AC-13 được giữ.
 - **Cần kiểm chứng: kiểu TS cho `node:sqlite`.** `@types/node` đang là `^22.10`; cần chắc file `sqlite.d.ts` có `DatabaseSync`, `isTransaction` và thuộc tính `errcode`/`errstr` của lỗi. Cách kiểm: `pnpm typecheck` ở bước 1; thiếu thì nâng `@types/node` trong dải 22.x (không nâng lên 24 vì `engines` là `>=22.13`).
-- **Node trong container là 22.23** (in `ExperimentalWarning`), máy thật dự kiến ≥ 24.15. API dùng trong spec (`DatabaseSync`, `exec`, `prepare`, `isTransaction`, `errcode`/`errstr`) đã thử chạy trên 22.23. Trên 24.15 cảnh báo có thể không còn; bộ lọc AC-14 vô hại khi không có cảnh báo.
-- **Antivirus khoá file.** SQLite trên Windows tự thử lại I/O khi bị chia sẻ/từ chối truy cập tạm thời (cơ chế retry trong `os_win.c`), `busy_timeout` lo khoá giữa các kết nối, AC-11 lo lúc khởi động. Mức đủ hay chưa chỉ biết khi chạy thật; `diagnose` AC-15 là chỗ phát hiện sớm (EPERM/CANTOPEN trong `dataDir`).
+- **Node trong container là 22.23** (có in `ExperimentalWarning`), máy thật dự kiến ≥ 24.15. API dùng trong spec (`DatabaseSync`, `exec`, `prepare`, `isTransaction`, `errcode`/`errstr`) đã thử chạy trên 22.23. **Cần kiểm chứng:** 24.15 (Stability 1.2) còn phát cảnh báo không. Cách kiểm ở bước 1: chạy `node -e` nạp `node:sqlite` trên Node ≥ 24.15 nếu có sẵn, không có thì đọc changelog/tài liệu `sqlite` của bản 24.15. Kết quả quyết định giữ hay bỏ AC-13.
+- **Antivirus khoá file.** SQLite trên Windows tự thử lại I/O khi bị chia sẻ/từ chối truy cập tạm thời (cơ chế retry trong `os_win.c`), `busy_timeout` lo khoá giữa các kết nối. 004 không thử lại lúc khởi động (để sau). Mức đủ hay chưa chỉ biết khi chạy thật; `diagnose` AC-14 là chỗ phát hiện sớm (EPERM/CANTOPEN trong `dataDir`).
 - **Cần kiểm chứng: `LOCALAPPDATA` có mặt khi app chạy từ Task Scheduler** (020). Thường có khi task chạy dưới tài khoản người dùng ở chế độ đã đăng nhập. Cách kiểm: thêm vào dòng `[sched]` của `diagnose --scheduler` trạng thái `LOCALAPPDATA set/unset` (không in giá trị). Thiếu thì fallback `<homedir>\AppData\Local` (AC-10) vẫn đúng chỗ.
 - **API đồng bộ chặn event loop.** Chấp nhận với dữ liệu nhỏ (ADR-0004). Không đọc/ghi lô lớn trong handler HTTP.
-- **Cỡ story.** Phần lõi (mở DB, migration, setting, composition root) là S. Thêm thử lại khi khởi động (AC-11), bộ lọc cảnh báo (AC-14) và `diagnose` (AC-15) đẩy lên gần M. Nếu cần gọn: tách AC-15 thành việc riêng của M0 (Câu hỏi mở 5).
+- **Cỡ story.** Sau khi cắt phần thử lại: lõi là S, `diagnose` (AC-14) và bộ lọc cảnh báo có điều kiện (AC-13) thêm một ít.
 
 ## Câu hỏi mở
-- [ ] 1. **DB hỏng khi khởi động:** đề xuất **dừng app** (thoát mã 1, một dòng stderr, giữ nguyên file) như AC-6/ADR-0008. Phương án khác: tự đổi tên thành `app.db.corrupt-<thời điểm>` rồi tạo DB mới để app vẫn chạy (mất setting, cache, job; 005 sẽ coi project như lần đầu, lấy mốc mới, có thể bỏ lỡ thay đổi trong khoảng đó). Chạy nền từ Task Scheduler thì "dừng" nghĩa là người dùng chỉ thấy không có toast, cho tới khi có trang tình trạng/log (009). Bạn chọn dừng (khuyến nghị cho 004, xem lại ở 009) hay tự cách ly?
-- [ ] 2. **Chế độ fake dùng SQLite thật `:memory:`** thay vì repository fake trong bộ nhớ (lệch chữ của ADR-0002, lý do trong ADR-0008). Bạn đồng ý để ADR-0008 chuyển sang Accepted?
-- [ ] 3. **Giữ bảng `setting` trong 004 dù chưa ai dùng tới 017?** Đề xuất giữ: rất nhỏ, và là bảng thật đầu tiên để kiểm cả đường migration → repository → composition root → reset. Phương án khác: 004 chỉ làm hạ tầng + migration rỗng, `setting` dời sang 017.
-- [ ] 4. **Nhánh adapter thật của `buildDeps`:** đề xuất giữ nguyên `throw` trong 004 (chưa có adapter thật nào), `openAppStorage` với `dataDir` được test riêng; story đầu tiên lắp nhánh thật (005) sẽ mở storage ở đó. Hay bạn muốn 004 đã mở DB thật ở nhánh thật trước khi `throw`?
-- [ ] 5. **Phần `diagnose` (AC-15) làm trong 004 hay tách** thành việc M0 riêng? Đề xuất làm trong 004 vì là cách duy nhất biết WAL/antivirus trên máy thật ổn trước 005/006, và lần chạy `diagnose` kế tiếp (sau khi nâng Node lên ≥ 24.15) kiểm được luôn.
-- [ ] 6. **Tên thư mục dữ liệu** `gh-issue-translator` (theo tên package gốc) — đúng ý bạn? Đổi sau khi đã có dữ liệu trên máy thật sẽ cần chuyển file.
+Đã chốt ở GATE 1 (2026-11-27):
+- [x] 1. DB hỏng lúc khởi động → dừng app, giữ nguyên file (AC-6); 009 sẽ hiển thị lỗi.
+- [x] 2. Fake dùng SQLite `:memory:` → ADR-0008 Accepted.
+- [x] 3. Giữ bảng `setting` trong 004.
+- [x] 4. Nhánh adapter thật của `buildDeps` vẫn `throw`; 005 lắp storage thật.
+- [x] 5. Giữ `diagnose` (AC-14). Cắt phần thử lại lỗi tạm thời (Ngoài phạm vi). AC-13 (lọc cảnh báo) thành có điều kiện.
+- [x] 6. Tên thư mục dữ liệu `gh-issue-translator`: giữ.
 
 ## Kế hoạch implement
 (Implementer làm theo thứ tự, mỗi bước một commit `feat(shared): … (004)`; mỗi bước `pnpm test` + `pnpm typecheck` xanh.)
-1. **Spike trong repo:** test nạp `node:sqlite` dưới Vitest và `tsx`, kiểm kiểu TS (`DatabaseSync`, `errcode`). Chọn cách nạp (`process.getBuiltinModule` nếu import tĩnh không ổn). Bộ lọc `ExperimentalWarning` của SQLite + AC-14.
+1. **Spike trong repo:** test nạp `node:sqlite` dưới Vitest và `tsx`, kiểm kiểu TS (`DatabaseSync`, `errcode`). Chọn cách nạp (`process.getBuiltinModule` nếu import tĩnh không ổn). Kiểm Node ≥ 24.15 còn phát `ExperimentalWarning` cho `node:sqlite` không: **còn** → làm bộ lọc + AC-13; **không** → bỏ AC-13 (không viết bộ lọc), ghi kết quả và cách kiểm vào Workflow log.
 2. `resolveDataDir` thuần (AC-10).
-3. `StorageError`, `openDatabase` (pragma, `quick_check`, phát hiện hỏng), `transaction(fn)` (AC-6, AC-7, AC-12).
+3. `StorageError`, `openDatabase` (pragma, `quick_check`, phát hiện hỏng), `transaction(fn)` (AC-6, AC-7, AC-11).
 4. Migration: kiểm danh sách file thuần, nạp thư mục `migrations/` (đường dẫn qua `import.meta.url`), runner theo `user_version` (AC-2, AC-3, AC-4, AC-5).
 5. `0001-setting.sql`, port `SettingStore`, `SqliteSettingStore` (AC-8, AC-9).
-6. `openAppStorage`: tạo `dataDir`, thử lại lỗi tạm thời với hàm chờ tiêm vào (AC-1, AC-11).
-7. Composition root + harness: `Deps.settings`, fake dùng `:memory:`, `/__test__/reset` xoá dữ liệu mọi bảng; `main.ts` bắt `StorageError` → một dòng stderr, thoát 1 (AC-13). `smoke.spec.ts` vẫn xanh.
-8. `diagnose`: dòng `node:sqlite file` (phần thuần vào `checks.mjs` có test), trạng thái `LOCALAPPDATA` trong `[sched]`; cập nhật bảng đọc kết quả ở `docs/spikes/diagnose.md` (AC-15).
+6. `openAppStorage`: tạo `dataDir`, mở, migrate; lỗi ném ngay (AC-1).
+7. Composition root + harness: `Deps.settings`, fake dùng `:memory:`, `/__test__/reset` xoá dữ liệu mọi bảng; `main.ts` bắt `StorageError` → một dòng stderr, thoát 1 (AC-12). `smoke.spec.ts` vẫn xanh.
+8. `diagnose`: dòng `node:sqlite file` (phần thuần vào `checks.mjs` có test), trạng thái `LOCALAPPDATA` trong `[sched]`; cập nhật bảng đọc kết quả ở `docs/spikes/diagnose.md` (AC-14).
 9. Docs: `docs/architecture/testing-harness.md` (reset xoá cả DB `:memory:`; fake dùng SQLite thật). Đề xuất (cần user đồng ý, implementer không tự sửa) thêm vào `CLAUDE.md` mục kiến trúc: `apps/app/src/shared/infrastructure/sqlite` + quy ước migration.
 
 ## Workflow log
 | Bước | Thời điểm | Kết quả |
 |---|---|---|
 | 1 Phân tích | 2026-11-27 | Spec draft, ADR-0008 Proposed; chờ user trả lời câu hỏi mở 1–6 |
+| GATE 1 duyệt | 2026-11-27 | User duyệt: dừng khi DB hỏng (009 hiển thị), fake `:memory:` (ADR-0008 Accepted), giữ `setting`, nhánh thật vẫn `throw`, cắt thử lại lỗi tạm thời, AC-13 có điều kiện, giữ `diagnose`, giữ tên `gh-issue-translator`. Trạng thái → approved |
+| 2 Design | 2026-11-27 | Bỏ qua: không có UI |
+| 3 Khoá e2e | 2026-11-27 | Bỏ qua: không có e2e (xem lý do dưới bảng truy vết AC) |
