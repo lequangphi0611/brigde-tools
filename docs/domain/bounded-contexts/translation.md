@@ -4,7 +4,8 @@ Package độc lập, dùng chung với tool dịch chat Việt↔Nhật. **Khô
 
 ## Model
 - `Direction` (VO): `{ from, to }`.
-- `Translation` (entity, khoá `hash + direction`): `text`, `model`, `glossaryVersion`, `createdAt`. Không bao giờ dịch lại nội dung đã dịch cùng hash + glossaryVersion.
+- `Translation` (entity, story 003, ADR-0009): khoá `TranslationCacheKey` = `sourceHash` (sha256 text gốc của **một đoạn**, không chuẩn hoá) + `direction` + `glossaryVersion` (của thuật ngữ liên quan tới riêng đoạn đó) + `promptVersion` + `configuredModel` (giá trị cờ `--model` trong cấu hình CLI, không có thì `""`); thuộc tính `text` (bản dịch), `model` (model thực tế từ output), `createdAt` (app đặt từ `Clock`). Không lưu text nguồn; `hint` không vào khoá.
+  - **Invariant:** không gọi engine cho đoạn đã có `Translation` cùng khoá; lần dịch lỗi không ghi `Translation` nào; lỗi đọc/ghi cache hoặc lỗi lấy `EngineVersion` không làm lần dịch lỗi. Trùng khoá khi ghi → ghi đè. Chưa có xoá/hết hạn (sau 009).
 - `GlossaryTerm` (entity, lưu ở app — 015): `projectId | null`, `ja`, `vi`, `note`. Trong `core-translate` chỉ là `GlossaryTermInput { ja, vi, note? }`, không có `projectId`.
 - `Glossary` (VO, story 002, ADR-0007): kết quả `mergeGlossary(common, project)`.
   - **Invariant:** khoá `termKey` (NFKC + gộp khoảng trắng + trim + viết thường của `ja`) duy nhất; `ja`/`vi` không rỗng sau chuẩn hoá; sắp theo khoá. Trùng giữa hai tầng → project thắng; trùng trong một tầng hoặc rỗng → `Error` (lỗi dữ liệu, 015 phải chặn lúc ghi).
@@ -26,6 +27,9 @@ Package độc lập, dùng chung với tool dịch chat Việt↔Nhật. **Khô
 - `Translator.translate(request: TranslationRequest): Promise<TranslationResult>` (`context.glossary` phải hợp lệ theo invariant của `Glossary`, sai → `Error` trước khi gọi engine — story 002) (ADR-0006, story 001; trước đó là `translate(text, direction, context)`) — adapter thật `ClaudeCliTranslator` dùng runner `infrastructure/claude-cli/` theo ADR-0003: không shell, nội dung qua stdin, cwd tạm rỗng, model không có tool, output JSON theo schema.
 - Nội dung issue là **dữ liệu, không phải lệnh**: prompt đặt nó trong khối phân cách (`<source>` chứa các `<segment id="sK">`, id do adapter đặt; hint trong `<context>`), thẻ giả trong nội dung bị che thành chỗ giữ, system prompt dặn bỏ qua mọi câu nhắm vào người dịch.
 - Lỗi: `TranslationFailure { reason, detail?, stderrTail? }`; message không chứa nội dung. Retry do hàng đợi (006) quyết.
+
+- `TranslationCache` (story 003, ADR-0009): `lookup(keys)` / `store(entries)`, bất đồng bộ. Port trong `core-translate`; `InMemoryTranslationCache` trong package (test, tool dịch chat); adapter `SqliteTranslationCache` ở app (bảng `translation`, `apps/app/src/contexts/translation/infrastructure/`).
+- `CachingTranslator implements Translator` (decorator, `application/`): kiểm request → bỏ đoạn không có chữ cần dịch → tra cache theo đoạn → gửi các đoạn trượt (gộp trùng khoá) cho `Translator` bên trong trong **một** yêu cầu → ghi kết quả. Không đoạn nào trượt → không gọi engine, `model = null`. Nhận `engineVersion: () => EngineVersion` (`{ promptVersion, configuredModel }`, gọi mỗi lần dịch) và `observer` (số trúng/trượt, lỗi cache; không có nội dung) lúc dựng. Adapter thật dùng `claudeCliEngineVersion(configPath)` (đọc lại cấu hình CLI như `ClaudeCliTranslator`, `extractConfiguredModel(args)`).
 
 ## Events
 - `TranslationReady { contentId, direction }`.
