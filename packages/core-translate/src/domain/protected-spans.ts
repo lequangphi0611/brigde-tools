@@ -43,23 +43,8 @@ export function protect(text: string): ProtectedText {
     cursor = end;
   };
 
-  // Pass 1: fenced code block (theo dòng). Pass 2: phần còn lại quét inline.
-  const fences = findFences(text);
-  let regionStart = 0;
-  const regions: Range[] = [];
-  for (const f of fences) {
-    regions.push({ start: regionStart, end: f.start });
-    regionStart = f.end;
-  }
-  regions.push({ start: regionStart, end: text.length });
-
-  const found: Range[] = [];
-  let ri = 0;
-  for (const region of regions) {
-    for (const r of scanInline(text, region)) found.push(r);
-    if (ri < fences.length) found.push(fences[ri]!);
-    ri++;
-  }
+  // Pass 1: fenced code block (theo dòng). Pass 2: quét inline, nhảy qua các fence (comment HTML được phép bao fence).
+  const found = scanInline(text, findFences(text));
   for (const r of found) emit(r.start, r.end);
   masked += text.slice(cursor);
   return { masked, spans };
@@ -136,19 +121,35 @@ function sticky(re: RegExp, text: string, at: number): RegExpExecArray | null {
   return re.exec(text);
 }
 
-function scanInline(text: string, region: Range): Range[] {
+function scanInline(text: string, fences: ReadonlyArray<Range>): Range[] {
   const out: Range[] = [];
-  const { end } = region;
-  let i = region.start;
+  let i = 0;
+  let fi = 0; // fence kế tiếp chưa qua
+  let regionStart = 0;
+  let end = fences.length > 0 ? fences[0]!.start : text.length; // các phần inline không vượt qua fence
   let openBrackets = 0;
+  const skipFencesBefore = (pos: number): void => {
+    while (fi < fences.length && fences[fi]!.start < pos) fi++;
+    end = fi < fences.length ? fences[fi]!.start : text.length;
+  };
   const push = (start: number, stop: number): void => {
     out.push({ start, end: stop });
     i = stop;
   };
 
-  while (i < end) {
+  while (i < text.length) {
+    if (i >= end) {
+      // Tới fence: che nguyên khối rồi quét tiếp sau nó.
+      const f = fences[fi]!;
+      push(f.start, f.end);
+      skipFencesBefore(i);
+      regionStart = i;
+      openBrackets = 0;
+      continue;
+    }
     const c = text[i]!;
     const atLineStart = i === 0 || text[i - 1] === "\n";
+    if (atLineStart && isBlankLineAfter(text, i, text.length)) openBrackets = 0; // `[` không nối qua đoạn văn
 
     if (atLineStart && (c === "[" || c === " " || c === "\t")) {
       const m = sticky(REF_DEF, text, i);
@@ -184,8 +185,12 @@ function scanInline(text: string, region: Range): Range[] {
     if (c === "<") {
       if (text.startsWith("<!--", i)) {
         const close = text.indexOf("-->", i + 4);
-        if (close !== -1 && close + 3 <= end) {
-          push(i, close + 3);
+        if (close !== -1) {
+          // Comment có thể bao cả fence: che một khối, bỏ qua các fence nằm trong nó.
+          let stop = close + 3;
+          for (const f of fences) if (f.start < stop && stop < f.end) stop = f.end; // `-->` nằm trong fence → che hết fence
+          push(i, stop);
+          skipFencesBefore(i);
           continue;
         }
       }
@@ -210,7 +215,7 @@ function scanInline(text: string, region: Range): Range[] {
       }
     }
 
-    if (EMAIL_LOCAL.test(c) && (i === region.start || !EMAIL_LOCAL.test(text[i - 1]!))) {
+    if (EMAIL_LOCAL.test(c) && (i === regionStart || !EMAIL_LOCAL.test(text[i - 1]!))) {
       const m = sticky(EMAIL, text, i);
       if (m && i + m[0].length <= end) {
         push(i, i + m[0].length);
@@ -218,7 +223,7 @@ function scanInline(text: string, region: Range): Range[] {
       }
     }
 
-    if (c === "@" && (i === region.start || !WORD.test(text[i - 1]!))) {
+    if (c === "@" && (i === regionStart || !WORD.test(text[i - 1]!))) {
       const m = sticky(MENTION, text, i);
       if (m && i + m[0].length <= end) {
         push(i, i + m[0].length);

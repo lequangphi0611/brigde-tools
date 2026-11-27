@@ -54,12 +54,20 @@ export function parseClaudeEnvelope(stdout) {
   let env = pick(tryParse(stdout.trim()));
   if (!env) {
     const lines = stdout.split(/\r?\n/);
-    for (let i = lines.length - 1; i >= 0 && !env; i--) env = pick(tryParse(lines[i].trim()));
+    // Giống findEnvelope của runner: chỉ nhận dòng có `type: "result"` (wrapper có thể in log JSON riêng).
+    for (let i = lines.length - 1; i >= 0 && !env; i--) {
+      const found = pick(tryParse(lines[i].trim()));
+      if (found?.type === "result") env = found;
+    }
   }
   if (!env) return { ok: false, reason: "BAD_OUTPUT" };
   if (env.is_error) return { ok: false, reason: "IS_ERROR" };
   let out = env.structured_output;
-  if (!isObject(out) && typeof env.result === "string") out = tryParse(env.result);
+  if (!isObject(out) && typeof env.result === "string") {
+    // Giống readCliResult của runner: JSON có thể nằm giữa text (vd. trong ```json … ```).
+    const m = /\{[\s\S]*\}/.exec(env.result);
+    out = m ? tryParse(m[0]) : undefined;
+  }
   if (!isObject(out) || typeof out.translation !== "string") return { ok: false, reason: "NO_TRANSLATION" };
   return { ok: true, translation: out.translation };
 }

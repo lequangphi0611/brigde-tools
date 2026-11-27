@@ -7,9 +7,10 @@
  */
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, readdirSync, statSync, existsSync } from "node:fs";
-import { join, relative } from "node:path";
+import { join, relative, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const ROOT = new URL("..", import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL("..", import.meta.url)); // .pathname hỏng trên Windows (/C:/…) và với %20
 const SPECS = join(ROOT, "e2e/specs");
 const LOCK = join(ROOT, "e2e/specs.lock.json");
 
@@ -23,7 +24,7 @@ function snapshot() {
   return Object.fromEntries(
     walk(SPECS)
       .sort()
-      .map((p) => [relative(ROOT, p), createHash("sha256").update(readFileSync(p)).digest("hex")]),
+      .map((p) => [relative(ROOT, p).split(sep).join("/"), createHash("sha256").update(readFileSync(p)).digest("hex")]),
   );
 }
 

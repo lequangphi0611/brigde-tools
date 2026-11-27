@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "start": "tsx src/main.ts",
-    "start:e2e": "vite build web && APP_ADAPTERS=fake PORT=4317 tsx src/main.ts",
+    "start:e2e": "vite build web && tsx src/main.ts",
     "build": "vite build web",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p web/tsconfig.json --noEmit"
   },

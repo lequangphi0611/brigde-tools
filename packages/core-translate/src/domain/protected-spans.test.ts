@@ -109,6 +109,23 @@ describe("protect / restore", () => {
     expect(protect("<!-- 未完").spans).toEqual([]);
   });
 
+  it("comment HTML bao cả fenced code block vẫn che thành một khối (không gửi phần comment đi)", () => {
+    const text = "<!-- 秘密メモ\n```\nx\n```\n終わり -->\n本文";
+    expect(protect(text)).toEqual({ masked: "⟦1⟧\n本文", spans: ["<!-- 秘密メモ\n```\nx\n```\n終わり -->"] });
+    const inner = "<!-- メモ\n```\n-->\n```\n本文";
+    expect(protect(inner)).toEqual({ masked: "⟦1⟧\n本文", spans: ["<!-- メモ\n```\n-->\n```"] });
+    expect(roundTrip(text)).toBe(text);
+  });
+
+  it("`[` không đóng ở đoạn trước không làm che `(...)` ở đoạn sau", () => {
+    const text = "配列[0 です\n\n別の段落 foo](説明です)";
+    expect(protect(text).spans).toEqual([]);
+    expect(protect("[リンク](https://x.example)\n\n[次](https://y.example)").spans).toEqual([
+      "(https://x.example)",
+      "(https://y.example)",
+    ]);
+  });
+
   it("AC-9 chỗ giữ giả trong nội dung được che và khôi phục đúng", () => {
     const text = "記号 ⟦1⟧ と `code`";
     const p = protect(text);
