@@ -26,18 +26,44 @@ export const FORBIDDEN_CLI_FLAGS: readonly string[] = [
   "--json-schema", "--output-format", "--input-format", "--resume", "-r", "--continue", "-c",
 ];
 
-export type CliConfigResult = { ok: true; config: CliConfig } | { ok: false; problem: string };
+/** Mã lỗi cấu hình máy đọc được (không chứa giá trị hay đường dẫn). */
+export type CliConfigProblemCode = "config_missing" | "config_not_json" | "config_invalid" | "forbidden_flag" | "command_cmd_bat";
+/** Tên key của schema; chỉ tên key, không bao giờ kèm giá trị. */
+export type CliConfigField = "command" | "args" | "timeoutSeconds" | "concurrency" | "maxInputChars" | "env";
+export const CLI_CONFIG_FIELDS: readonly CliConfigField[] = ["command", "args", "timeoutSeconds", "concurrency", "maxInputChars", "env"];
+
+export type CliConfigResult =
+  | { ok: true; config: CliConfig }
+  | { ok: false; problem: string; code: CliConfigProblemCode; field?: CliConfigField };
+
+const FIELD_RULE: Record<CliConfigField, string> = {
+  command: "command phải là chuỗi không rỗng",
+  args: "args phải là mảng chuỗi (tối đa 50 phần tử)",
+  timeoutSeconds: "timeoutSeconds phải là số nguyên 10–1800",
+  concurrency: "concurrency phải là số nguyên 1–4",
+  maxInputChars: "maxInputChars phải là số nguyên 100–200000",
+  env: "env phải là object: tên biến (chữ, số, _) → chuỗi",
+};
 
 /** Kiểm tra thuần, tách khỏi việc đọc file để test được. */
 export function checkCliConfig(raw: unknown, platform: NodeJS.Platform = process.platform): CliConfigResult {
   const parsed = CliConfigSchema.safeParse(raw);
-  if (!parsed.success) return { ok: false, problem: "Tệp cấu hình Claude CLI sai định dạng" };
+  if (!parsed.success) {
+    const key = parsed.error.issues[0]?.path[0];
+    const field = CLI_CONFIG_FIELDS.find((f) => f === key);
+    return {
+      ok: false,
+      code: "config_invalid",
+      ...(field ? { field } : {}),
+      problem: field ? `Tệp cấu hình Claude CLI sai ở trường: ${FIELD_RULE[field]}` : "Tệp cấu hình Claude CLI sai định dạng (phải là object JSON)",
+    };
+  }
   const cfg = parsed.data;
   const bad = cfg.args.find((a) => FORBIDDEN_CLI_FLAGS.includes(a.split("=")[0]!.toLowerCase()));
-  if (bad) return { ok: false, problem: `Cấu hình Claude CLI không được chứa cờ ${bad.split("=")[0]} (app tự đặt hoặc cờ không an toàn)` };
+  if (bad) return { ok: false, code: "forbidden_flag", field: "args", problem: `Cấu hình Claude CLI không được chứa cờ ${bad.split("=")[0]} (app tự đặt hoặc cờ không an toàn)` };
   // Node từ chối spawn .cmd/.bat khi không có shell, mà shell sẽ parse nội dung → không bao giờ bật shell.
   if (platform === "win32" && /\.(cmd|bat)$/i.test(cfg.command))
-    return { ok: false, problem: 'Trên Windows, "command" không được là .cmd/.bat: trỏ tới node (đặt đường dẫn cli.js của Claude Code đầu "args") hoặc tới claude.exe' };
+    return { ok: false, code: "command_cmd_bat", field: "command", problem: 'Trên Windows, "command" không được là .cmd/.bat: trỏ tới node (đặt đường dẫn cli.js của Claude Code đầu "args") hoặc tới claude.exe' };
   return { ok: true, config: cfg };
 }
 
@@ -46,12 +72,12 @@ export async function loadCliConfig(path: string): Promise<CliConfigResult> {
   try {
     text = await readFile(path, "utf8");
   } catch {
-    return { ok: false, problem: "Chưa có tệp cấu hình Claude CLI" };
+    return { ok: false, code: "config_missing", problem: "Chưa có tệp cấu hình Claude CLI" };
   }
   try {
     return checkCliConfig(JSON.parse(text));
   } catch {
-    return { ok: false, problem: "Tệp cấu hình Claude CLI không phải JSON hợp lệ" };
+    return { ok: false, code: "config_not_json", problem: "Tệp cấu hình Claude CLI không phải JSON hợp lệ" };
   }
 }
 

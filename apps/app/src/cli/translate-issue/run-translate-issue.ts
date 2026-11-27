@@ -3,7 +3,7 @@ import { readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { hasTranslatableText, protect, TranslationFailure, type CachingObserver, type TranslationRequest, type Translator } from "@app/core-translate";
+import { CLI_CONFIG_FIELDS, hasTranslatableText, protect, TranslationFailure, type CachingObserver, type TranslationRequest, type Translator } from "@app/core-translate";
 import { buildRealTranslator, type RealTranslatorOptions } from "../../composition-root.ts";
 import { dataDirSource, resolveDataDir } from "../../shared/infrastructure/data-dir.ts";
 import { openAppStorage } from "../../shared/infrastructure/sqlite/app-storage.ts";
@@ -234,6 +234,7 @@ export async function runTranslateIssue(options: RunTranslateIssueOptions): Prom
     if (e instanceof TranslationFailure) {
       const extra: StatusFields = {};
       if (e.detail !== undefined && /^[a-z_]+$/.test(e.detail)) extra.detail = e.detail;
+      if (e.field !== undefined && CLI_CONFIG_FIELDS.some((f) => f === e.field)) extra.field = e.field;
       return fail(1, `translate:${e.reason}`, extra);
     }
     const name = e instanceof Error && /^[A-Za-z0-9_]+$/.test(e.name) ? e.name : undefined;

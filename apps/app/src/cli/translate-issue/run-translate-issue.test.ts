@@ -187,6 +187,20 @@ describe("lỗi engine, cấu hình, lưu trữ", () => {
     }
   });
 
+  it("AC-10: báo mã và tên trường cấu hình, không báo giá trị", async () => {
+    writeIssue(jaBody);
+    const r = await run(["issue.json", "--config", writeConfig("range.json", [], { timeoutSeconds: 3000 })]);
+    expect(r.code).toBe(1);
+    expect(r.last).toMatch(/^translate-issue FAIL translate:not_configured detail=config_invalid field=timeoutSeconds .*cache=warn:engineVersion/);
+    expect(r.last).not.toContain("3000");
+    const m = await run(["issue.json", "--config", path.join(work, "ZZnone.json")]);
+    expect(m.last).toContain("FAIL translate:not_configured detail=config_missing enc=");
+    expect(m.last).toContain("cache=warn:engineVersion");
+    expect(m.last).not.toContain("field=");
+    const f = await run(["issue.json", "--config", writeConfig("flag.json", ["--tools", "x"])]);
+    expect(f.last).toContain("detail=forbidden_flag field=args");
+  });
+
   it("AC-11: APP_DATA_DIR là file thường", async () => {
     writeIssue(jaBody);
     const f = path.join(work, "ZZDATAZZ-file");

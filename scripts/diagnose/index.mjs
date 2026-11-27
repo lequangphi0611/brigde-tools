@@ -16,7 +16,7 @@ import { createInterface } from "node:readline/promises";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import {
-  CLAUDE_SCHEMA, CLAUDE_SYSTEM_PROMPT, claudeFixedArgs, findForbiddenFlag, classifyClaudeFailure, classifyGhError, compareNodes,
+  CLAUDE_SCHEMA, CLAUDE_SYSTEM_PROMPT, claudeFixedArgs, findForbiddenFlag, findConfigRangeProblem, classifyClaudeFailure, classifyGhError, compareNodes,
   evaluateCounts, evaluateTranslation, hasProjectScope, isoDay, isoSecond, parseClaudeEnvelope, sampleStdin,
   analyzeFilter, chooseClaude, diagnoseDataDir, describeStepFailure, localAppDataState, countAfter, pickTimeProbe, describeTaskResult, schedulerDeadlineMs, SCHED_DONE,
 } from "./checks.mjs";
@@ -330,6 +330,12 @@ function resolveClaude() {
       const bad = findForbiddenFlag(Array.isArray(c.args) ? c.args : []);
       if (bad) {
         say("claude cfg", "FAIL", `config/claude-cli.local.json chứa cờ ${bad} → app sẽ từ chối (app tự đặt hoặc cờ không an toàn)`);
+        return null;
+      }
+      const range = findConfigRangeProblem(c);
+      if (range) {
+        say("claude cfg", "FAIL", `config/claude-cli.local.json: ${range.field} phải là số nguyên ${range.min}–${range.max}` +
+          (range.value !== undefined ? ` (đang là ${range.value})` : "") + " → app sẽ báo not_configured");
         return null;
       }
       return { command: c.command, args: c.args ?? [], env: c.env ?? {}, source: "config", timeoutSeconds: c.timeoutSeconds ?? 300 };

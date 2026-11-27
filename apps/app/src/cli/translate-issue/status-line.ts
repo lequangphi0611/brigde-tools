@@ -4,6 +4,8 @@
  * Thông báo lỗi chỉ nêu tên key, không bao giờ chứa giá trị bị từ chối.
  */
 
+import { CLI_CONFIG_FIELDS } from "@app/core-translate";
+
 export type Outcome = "OK" | "FAIL";
 
 const FIXED_CODES = new Set([
@@ -28,6 +30,8 @@ export interface StatusFields {
   migration?: string | number;
   sqlite?: string | number;
   detail?: string;
+  /** Tên key của cấu hình CLI bị lỗi (chỉ tên, không giá trị). */
+  field?: string;
   enc?: "utf8" | "utf8-bom" | "utf16le-bom";
   jaChars?: number;
   srcChars?: number;
@@ -52,6 +56,7 @@ const SCHEMA: ReadonlyArray<readonly [keyof StatusFields, Validator]> = [
   ["migration", token],
   ["sqlite", token],
   ["detail", (v) => typeof v === "string" && SAFE_DETAIL.test(v)],
+  ["field", oneOf(...CLI_CONFIG_FIELDS)],
   ["enc", oneOf("utf8", "utf8-bom", "utf16le-bom")],
   ["jaChars", count],
   ["srcChars", count],

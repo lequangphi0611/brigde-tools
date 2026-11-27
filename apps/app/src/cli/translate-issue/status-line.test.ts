@@ -22,6 +22,13 @@ describe("formatStatusLine (AC-13)", () => {
     expect(formatStatusLine({ outcome: "OK", fields: { cache: "warn:store/sqlite=ERR_SQLITE_ERROR" } })).toContain("cache=warn:store/sqlite=ERR_SQLITE_ERROR");
   });
 
+  it("not_configured: detail rồi field, field phải là tên key của schema", () => {
+    expect(formatStatusLine({ outcome: "FAIL", code: "translate:not_configured", fields: { detail: "config_invalid", field: "timeoutSeconds", cache: "warn:engineVersion" } })).toBe(
+      "translate-issue FAIL translate:not_configured detail=config_invalid field=timeoutSeconds cache=warn:engineVersion",
+    );
+    expect(() => formatStatusLine({ outcome: "FAIL", code: "translate:not_configured", fields: { field: "ZZSECRETZZ" } })).toThrow();
+  });
+
   it("từ chối mã, key, giá trị lạ và không lặp giá trị đó trong thông báo", () => {
     const bad = "ZZSECRETZZ";
     const cases: Array<() => string> = [
