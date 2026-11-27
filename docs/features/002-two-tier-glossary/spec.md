@@ -91,7 +91,7 @@ Scenario: AC-7 Chỉ thuật ngữ xuất hiện trong lần gọi đó mới v�
   Given glossary [{課題, issue}, {納品, bàn giao}, {担当者, người phụ trách}]
   And request có title "課題の担当者を決める" và body "よろしくお願いします"
   When ClaudeCliTranslator dịch
-  Then stdin có khối <glossary> chứa đúng 2 dòng {"ja":"課題","vi":"issue"} và {"ja":"担当者","vi":"người phụ trách"}, theo thứ tự termKey
+  Then stdin có khối <glossary> chứa đúng 2 dòng {"ja":"担当者","vi":"người phụ trách"} rồi {"ja":"課題","vi":"issue"}, theo thứ tự termKey (code unit: 担 U+62C5 < 課 U+8AB2)
   And không có dòng nào của "納品"
   And khi không thuật ngữ nào xuất hiện trong mọi đoạn, stdin và system prompt như AC-6
 
@@ -207,3 +207,5 @@ Không có.
 | GATE 1 | 2026-11-27 | User duyệt, chốt 7 câu hỏi theo đề xuất. Trạng thái approved |
 | 2 Design | 2026-11-27 | Bỏ qua (Cần UI: không) |
 | 3 Khoá hành vi | 2026-11-27 | Bỏ qua theo câu hỏi 7 (không có hành vi người dùng thấy được; khoá ở 015/012) |
+| 4 Implement | 2026-11-27 | 2 lượt implementer, 6 commit `feat(translation)` (bước 1–7). Sửa ví dụ thứ tự AC-7 cho khớp termKey |
+| 5 Verify | 2026-11-27 | `pnpm verify` xanh: typecheck, 169 unit, e2e lock OK, e2e 1/1 |
