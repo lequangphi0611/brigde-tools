@@ -180,3 +180,21 @@ describe("thẻ giả có backslash đứng trước (AC-8)", () => {
     expect(restore(p.masked, p.spans)).toEqual({ ok: true, text });
   });
 });
+
+describe("CRLF", () => {
+  it("AC-3 fence đóng đúng, chữ Nhật sau fence vẫn được dịch, restore nguyên văn CRLF", () => {
+    const code = "```ts\r\nconst a = 1;\r\n```";
+    const text = `手順:\r\n${code}\r\n以上の手順で再現します`;
+    const p = protect(text);
+    expect(p.spans).toEqual([code]);
+    expect(p.masked).toBe("手順:\r\n⟦1⟧\r\n以上の手順で再現します");
+    expect(restore(p.masked, p.spans)).toEqual({ ok: true, text });
+  });
+
+  it("AC-5 định nghĩa link tham chiếu với CRLF", () => {
+    const text = "本文 https://example.jp/b\r\n\r\n[ref]: https://example.jp/ref\r\n次の行";
+    const p = protect(text);
+    expect(p.spans).toEqual(["https://example.jp/b", "[ref]: https://example.jp/ref"]);
+    expect(restore(p.masked, p.spans)).toEqual({ ok: true, text });
+  });
+});

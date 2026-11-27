@@ -96,7 +96,8 @@ function findFences(text: string): Range[] {
   while (pos <= text.length) {
     let eol = text.indexOf("\n", pos);
     if (eol === -1) eol = text.length;
-    const line = text.slice(pos, eol);
+    const lineEnd = eol > pos && text[eol - 1] === "\r" ? eol - 1 : eol; // CRLF: \r không thuộc nội dung dòng
+    const line = text.slice(pos, lineEnd);
     if (open === null) {
       const m = FENCE_OPEN.exec(line);
       if (m && !(m[1]![0] === "`" && m[2]!.includes("`"))) {
@@ -105,7 +106,7 @@ function findFences(text: string): Range[] {
     } else {
       const m = /^[ \t>]*(`{3,}|~{3,})[ \t]*$/.exec(line);
       if (m && m[1]![0] === open.ch && m[1]!.length >= open.len) {
-        out.push({ start: open.markerStart, end: eol });
+        out.push({ start: open.markerStart, end: lineEnd });
         open = null;
       }
     }
@@ -118,7 +119,7 @@ function findFences(text: string): Range[] {
 
 // ---------- inline ----------
 
-const REF_DEF = /[ \t]{0,3}(\[(?!\^)[^\]\n]+\]:[ \t]*\S+(?:[ \t]+(?:"[^"\n]*"|'[^'\n]*'|\([^)\n]*\)))?)[ \t]*(?=\n|$)/y;
+const REF_DEF = /[ \t]{0,3}(\[(?!\^)[^\]\n]+\]:[ \t]*\S+(?:[ \t]+(?:"[^"\n]*"|'[^'\n]*'|\([^)\n]*\)))?)[ \t]*(?=\r?\n|$)/y;
 const AUTOLINK = /<[a-zA-Z][a-zA-Z0-9+.-]{1,31}:[^\s<>]*>/y;
 const BARE_URL = /https?:\/\/[^\s<>`　-〿＀-￯]+/y;
 const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/y;

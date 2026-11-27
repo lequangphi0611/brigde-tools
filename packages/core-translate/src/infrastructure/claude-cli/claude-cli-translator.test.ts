@@ -145,6 +145,14 @@ describe("ClaudeCliTranslator", () => {
     expect(r.segments[0]!.text).toBe(`[vi] ${text}`);
   });
 
+  it("AC-3 CRLF: chữ sau fence vẫn được gửi đi dịch", async () => {
+    const { translator, calls } = setup();
+    const text = "手順:\r\n```ts\r\nconst a = 1;\r\n```\r\n以上の手順で再現します";
+    const r = await translator.translate(req([["a", text]]));
+    expect(calls()[0].stdin).toContain("以上の手順で再現します");
+    expect(r.segments[0]!.text).toBe(`[vi] ${text}`);
+  });
+
   it("AC-9 chỗ giữ giả không phá khôi phục", async () => {
     const { translator } = setup();
     const text = "記号 ⟦1⟧ と `code`";
