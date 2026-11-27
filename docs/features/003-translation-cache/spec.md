@@ -1,6 +1,6 @@
 # 003 — Cache bản dịch theo đoạn (`hash + direction + glossaryVersion`)
 
-- Trạng thái: approved
+- Trạng thái: done
 - Context: Translation (`packages/core-translate`: port + decorator; adapter SQLite ở `apps/app`)
 - Cần UI: không
 
@@ -279,3 +279,6 @@ Không có.
 | 3 Khoá hành vi | 2026-11-27 | Bỏ qua theo Câu hỏi 7: không có hành vi người dùng thấy được qua UI (app chưa gọi `Translator`, `FakeTranslator` xác định nên cache không đổi gì trên màn hình); khoá bằng unit/integration, e2e smoke giữ xanh (AC-16). Khoá e2e ở 006/012 |
 | 4 Implement (lượt 1) | 2026-11-27 | Xong bước 1–4 của kế hoạch trong `packages/core-translate`: khoá cache, `extractConfiguredModel`/`CLAUDE_CLI_PROMPT_VERSION`/`claudeCliEngineVersion`, port + hợp đồng + `InMemoryTranslationCache`, `CachingTranslator` (+ `runTranslatorContract` với FakeTranslator). Còn bước 5–8 (adapter thật trong package, SQLite, composition root, docs); chưa chọn subpath export cho `translation-cache.contract.ts` (quyết ở bước 6) |
 | 4 Implement (lượt 2) | 2026-11-27 | Xong bước 5–7: `caching-claude-cli.test.ts` (AC-1/2/5/13 với fake CLI), migration `0002-translation.sql` + `SqliteTranslationCache` + test AC-14/AC-15, composition root fake lắp `CachingTranslator(FakeTranslator)` + cache SQLite (AC-16). Lựa chọn: chưa có tiền lệ import hợp đồng test giữa package → thêm subpath export `@app/core-translate/testing` (`packages/core-translate/src/testing.ts`, xuất `runTranslationCacheContract`, `runTranslatorContract`). Nhánh adapter thật của composition root giữ nguyên `throw` (spec để cho 005). Còn bước 8 (docs) |
+| 5 Verify | 2026-11-27 | Orchestrator tự chạy `pnpm verify`: xanh (typecheck, 301 unit, e2e lock OK, e2e smoke 1 passed) |
+| 6 Review | 2026-11-27 | APPROVE, không must-fix. should-fix: bước 8 docs. 5 nit chờ user chọn |
+| 7 PR | 2026-11-27 | Spec done, roadmap ✅ 003. Chờ GATE 4 (ADR-0009 Accepted, nit, push) |
