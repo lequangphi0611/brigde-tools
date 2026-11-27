@@ -238,3 +238,4 @@ Không có.
 |---|---|---|
 | 1 Phân tích | 2026-11-27 | Spec draft, 17 AC (unit + trong process + spawn mức process, không e2e), 3 câu hỏi mở. Không đổi docs domain, không ADR |
 | GATE 1 | 2026-11-27 | User duyệt. Chốt: không nhận glossary (`glossary: []`, nguồn thật ở 015); cấu hình CLI mặc định `<repo>/config/claude-cli.local.json` + `--config`; không e2e, khoá bằng Vitest + `fake-claude-cli.mjs`; cắt AC giữ cỡ S (bỏ đổi model và cache lỗi vì đã phủ ở 003, lỗi lưu trữ chỉ giữ `open_failed`, `input_too_large` gộp vào AC lỗi engine, AC đoạn rỗng và đường dẫn tương đối mỗi cái một test), còn 14 AC; được thêm `pnpm translate-issue` vào CLAUDE.md. Trạng thái approved |
+| 4 Implement, lượt 1 | 2026-11-27 | Xong bước 1–3 (issue-input, status-line + dataDirSource, buildRealTranslator trong composition-root); unit xanh, typecheck xanh. Còn bước 4–6 |
