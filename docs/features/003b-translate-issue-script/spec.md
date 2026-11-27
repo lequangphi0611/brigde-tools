@@ -150,6 +150,7 @@ Scenario: AC-9 Engine lỗi: báo mã, không lộ stderr, không ghi cache
 Scenario: AC-10 Cấu hình CLI thiếu hoặc sai
   Given --config trỏ tới file không tồn tại (hoặc chứa cờ cấm "--tools")
   Then exit 1, dòng cuối có "FAIL translate:not_configured" và "cache=warn:engineVersion"
+  And dòng cuối có "detail=<mã>" (config_missing / config_not_json / config_invalid / forbidden_flag / command_cmd_bat) và, nếu biết, "field=<tên key>" (vd "detail=config_invalid field=timeoutSeconds" khi timeoutSeconds = 3000); không có giá trị cấu hình
   And không chứa đường dẫn config
 
 Scenario: AC-11 Không mở được DB thì dừng, không in đường dẫn
@@ -244,3 +245,4 @@ Không có.
 | 4 Implement, lượt 2 | 2026-11-27 | Xong bước 4–6: `run-translate-issue.ts` (+ test trong process), `main.ts`, script `translate-issue` ở root (thêm `tsx` vào devDependencies của root để giữ `INIT_CWD`), test spawn mức process, docs (diagnose.md, CLAUDE.md). Lệch spec: AC-9 `garbage` không cho `detail=invalid_schema` (xem báo cáo) |
 | Review vòng 1 | 2026-11-27 | APPROVE. Sửa: AC-9 theo hành vi thật của fake CLI; ghi cách chạy bằng root script; docs dùng `pnpm -s`, phải đứng trong repo; `main` bọc `runTranslateIssueSafely` (FAIL internal); đồng bộ range `tsx` ^4.23.15; bỏ `!` ở `output_write` |
 | 5 Verify + 7 PR | 2026-11-27 | Orchestrator chạy `pnpm verify` xanh (340 unit, e2e lock OK, smoke 1/1). Để lại 2 nit: test AC-14/AC-5 mỏng, `segments` lặp logic chọn đoạn của core. Trạng thái done. Tiêu chí M1 còn chờ chạy trên máy thật |
+| Sửa sau chạy thật | 2026-11-27 | User đặt `timeoutSeconds: 3000` (ngoài 10–1800) và chỉ thấy `translate:not_configured`. `checkCliConfig`/`loadCliConfig` trả thêm `code` + `field` (chỉ tên key từ zod issue path), `TranslationFailure` mang `detail`=code và `field`; dòng trạng thái in `detail=` `field=` (field whitelist theo key schema); `diagnose` báo trường số ngoài khoảng. Docs diagnose.md cập nhật |

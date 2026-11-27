@@ -77,6 +77,6 @@ translate-issue OK enc=utf8 jaChars=120 srcChars=200 segments=2 hits=0 misses=2 
 | `data` | Nguồn của `dataDir` (không in đường dẫn) |
 | `tmpLeft` | Số thư mục `ghit-ai-*` còn trong thư mục tạm (theo dõi EPERM, chỉ đếm) |
 
-Lỗi: `FAIL <mã>`. Exit 2 là đầu vào sai (`usage`, `input_not_found`, `input_unreadable`, `input_encoding`, `input_not_json`, `input_bad_shape`, `data_dir_invalid`); exit 1 là `storage:<lý do>`, `translate:<lý do>` (kèm `detail=`), `output_write`, `internal`. `translate:not_configured` nghĩa là `--config` thiếu hoặc sai. Stderr có thể có `ExperimentalWarning` của SQLite trên Node < 24.15, không chứa dữ liệu.
+Lỗi: `FAIL <mã>`. Exit 2 là đầu vào sai (`usage`, `input_not_found`, `input_unreadable`, `input_encoding`, `input_not_json`, `input_bad_shape`, `data_dir_invalid`); exit 1 là `storage:<lý do>`, `translate:<lý do>` (kèm `detail=`), `output_write`, `internal`. `translate:not_configured` nghĩa là `--config` thiếu hoặc sai; xem `detail=` và `field=`: `config_missing` (không có file), `config_not_json`, `config_invalid field=<key>` (key sai kiểu hoặc ngoài khoảng, vd `timeoutSeconds` 10–1800, `concurrency` 1–4, `maxInputChars` 100–200000), `forbidden_flag field=args` (cờ cấm trong `args`), `command_cmd_bat field=command` (Windows không nhận `.cmd`/`.bat`). Dòng `claude cfg FAIL` của `diagnose` cũng nêu trường và khoảng hợp lệ. Stderr có thể có `ExperimentalWarning` của SQLite trên Node < 24.15, không chứa dữ liệu.
 
 Ghi kết quả hai lần chạy (`ms`, `tmpLeft`, `enc`, `jaChars`) vào `docs/spikes/claude-cli-windows.md` mục "Lần 5".
