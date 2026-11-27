@@ -1,6 +1,6 @@
 # 005b — Poller một project (logic, chạy trọn trong container)
 
-- Trạng thái: approved (GATE 1, 2026-11-27)
+- Trạng thái: done (2026-11-27)
 - Context: Tracking (domain, `PollCycle`, `PollScheduler`, bảng Tracking); hạ tầng dùng chung (bus event, `UnitOfWork`); chế độ fake của composition root + route `/__test__/poll`
 - Cần UI: không
 
@@ -431,3 +431,4 @@ Không còn.
 | Implement bước 1–3 | 2026-11-27 | Domain thuần (`close-rule`, `content`, `issue`, `tracking-decision`, `diff-contents`, `timestamps`), kiểu event ở `shared/events/`; port `DomainEventPublisher` / `UnitOfWork`, `InProcessEventBus`, `SqliteUnitOfWork`, `RecordingEventBus` (`failWhen`); migration `0003-tracking.sql`, port `TrackingRepository`, `SqliteTrackingRepository`. Test cũ của 003 không còn cứng số migration. Còn bước 4–6 |
 | Implement bước 4–6 | 2026-11-27 | `PollCycle` + `PollReport` + `formatPollLine` (AC-1…25, 27), `PollScheduler` (AC-26), nhánh fake lắp `PollCycle` (project cố định, `InProcessEventBus` chưa có bên nghe, không chạy scheduler), `POST /__test__/poll`, `Harness.runPoll()`, cập nhật `testing-harness.md` (AC-28). Nhánh thật vẫn throw (005c). ADR-0011 vẫn Proposed |
 | Review 005b + sửa finding | 2026-11-27 | Reviewer APPROVE; user chọn sửa tất cả: `PollCycle.run()` gộp lời gọi chồng + đọc lại issue trong transaction; phân loại lỗi lưu trữ tiêm qua `classifyStorageError` (`classifyStorageFailure`); domain có kiểu tối thiểu `github-view.ts`; log ném lỗi không dừng scheduler; test AC-14/23/27 chặt hơn, thêm test FAIL storage và chạy chồng; docs `tracking.md`/`ubiquitous-language.md` khớp code; ADR-0011 Accepted |
+| 5 Verify | 2026-11-27 | Orchestrator chạy `pnpm verify`: xanh (551 test). Kiểm test chạy chồng đỏ khi bỏ bản sửa. Story done; code gộp PR #11 |
