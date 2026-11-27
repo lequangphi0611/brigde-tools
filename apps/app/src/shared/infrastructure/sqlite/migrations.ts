@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import type { Database } from "./open-database.ts";
+import { isCorruptionCode, type Database } from "./open-database.ts";
 import { StorageError, sqliteErrorInfo } from "./storage-error.ts";
 
 export interface Migration {
@@ -18,7 +18,7 @@ const FILE_PATTERN = /^(\d{4})-([a-z0-9-]+)\.sql$/;
 export function parseMigrationFileNames(fileNames: readonly string[]): Array<{ number: number; fileName: string }> {
   const parsed: Array<{ number: number; fileName: string }> = [];
   for (const fileName of fileNames) {
-    if (!fileName.endsWith(".sql")) continue;
+    if (!fileName.toLowerCase().endsWith(".sql")) continue;
     const match = FILE_PATTERN.exec(fileName);
     if (!match) {
       throw new StorageError("invalid_migrations", `Tên file migration sai mẫu: ${fileName}`);
@@ -78,9 +78,13 @@ export function runMigrations(db: Database, migrations: readonly Migration[]): n
         db.raw.exec(`PRAGMA user_version = ${migration.number}`);
       });
     } catch (e) {
+      const info = sqliteErrorInfo(e);
+      if (isCorruptionCode(info.sqliteCode)) {
+        throw new StorageError("corrupt", "File DB hỏng hoặc không phải SQLite", { migration: migration.number, ...info });
+      }
       throw new StorageError("migration_failed", `Migration ${migration.number} (${migration.name}) lỗi`, {
         migration: migration.number,
-        ...sqliteErrorInfo(e),
+        ...info,
       });
     }
     applied.push(migration.number);

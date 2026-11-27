@@ -79,6 +79,12 @@ describe("AC-4 danh sách migration không hợp lệ", () => {
     }
   });
 
+  it("N2: đuôi .sql không phân biệt hoa thường, sai mẫu thì invalid_migrations", () => {
+    for (const names of [["0001-a.SQL"], ["0001-a.sql", "0002-B.Sql"]]) {
+      expect(catchStorage(() => parseMigrationFileNames(names)).reason).toBe("invalid_migrations");
+    }
+  });
+
   it("bỏ qua file không có đuôi .sql, sắp theo số", () => {
     expect(parseMigrationFileNames(["README.md", "0002-b.sql", "0001-a.sql"]).map((p) => p.number)).toEqual([1, 2]);
   });
@@ -119,5 +125,19 @@ describe("AC-5 DB mới hơn app (mức runner)", () => {
     expect(catchStorage(() => runMigrations(db, [m1])).reason).toBe("schema_too_new");
     expect(db.schemaVersion()).toBe(5);
     expect(tableExists(db, "a")).toBe(false);
+  });
+});
+
+describe("N1 lỗi hỏng DB trong lúc migrate", () => {
+  it.each([11, 26, 267])("errcode %i → reason corrupt", (errcode) => {
+    const fake = {
+      schemaVersion: () => 0,
+      transaction: () => {
+        throw Object.assign(new Error("x"), { errcode, errstr: "malformed" });
+      },
+    } as unknown as ReturnType<typeof openDatabase>;
+    const err = catchStorage(() => runMigrations(fake, [m1]));
+    expect(err.reason).toBe("corrupt");
+    expect(err.sqliteCode).toBe(errcode);
   });
 });
