@@ -1,6 +1,6 @@
 # ADR-0009: Cache bản dịch theo đoạn bằng decorator trong `core-translate`
 
-- Trạng thái: Proposed (user đã duyệt nội dung ở GATE 1 story 003, 2026-11-27; chuyển Accepted khi story xong)
+- Trạng thái: Accepted (user duyệt nội dung ở GATE 1 story 003 và chấp nhận ở GATE 4, 2026-11-27)
 - Ngày: 2026-11-27
 - Liên quan: ADR-0003 (runner, cấu hình đọc lại mỗi lần), ADR-0006 (port theo lô), ADR-0007 (`glossaryVersion`), ADR-0008 (lưu trữ), story 003 (`docs/features/003-translation-cache/spec.md`), 003b, 006, 012
 

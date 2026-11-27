@@ -29,7 +29,7 @@ pnpm dev                            # chạy app (hiện chỉ chạy được v
 pnpm monorepo, TypeScript strict, ESM, import nội bộ có đuôi `.ts` (chạy bằng `tsx`).
 
 - `packages/core-translate` — bounded context **Translation**, package dùng chung với một tool dịch chat khác → **không được import gì từ `apps/`**.
-- `apps/app/src/contexts/{tracking,notification}/{domain,application,infrastructure}` — các bounded context còn lại. Domain thuần (không I/O); application chỉ dùng domain + port; context không import domain của nhau, giao tiếp qua domain event hoặc ID.
+- `apps/app/src/contexts/{tracking,notification}/{domain,application,infrastructure}` — các bounded context còn lại. Domain thuần (không I/O); application chỉ dùng domain + port; context không import domain của nhau, giao tiếp qua domain event hoặc ID. `apps/app/src/contexts/translation/infrastructure/` chỉ chứa adapter của app cho port trong core-translate (vd. `SqliteTranslationCache`, ADR-0009).
 - `apps/app/src/shared/ports` — port cho hệ ngoài (`GitHubGateway`, `Notifier`, `Clock`); `Translator` nằm trong core-translate.
 - `apps/app/src/shared/infrastructure/sqlite` — hạ tầng lưu trữ dùng chung (`node:sqlite`: mở DB, pragma, transaction, migration). Một chuỗi migration toàn app `migrations/NNNN-<tên>.sql`, file đã merge thì không sửa, chỉ thêm file mới; thời gian lưu ISO UTC lấy từ `Clock`, không dùng `CURRENT_TIMESTAMP`. Repository adapter của context nằm trong `infrastructure/` của context đó. Chế độ fake dùng SQLite `:memory:` thật. Chi tiết: ADR-0008.
 - `apps/app/src/composition-root.ts` — **nơi duy nhất** chọn adapter thật hay fake, theo `APP_ADAPTERS`.
