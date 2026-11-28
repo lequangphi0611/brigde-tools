@@ -178,8 +178,10 @@ export class GhCliGateway implements GitHubGateway {
     const missing: string[] = [];
     for (let i = 0; i < ids.length; i += this.detailBatch) {
       const batch = ids.slice(i, i + this.detailBatch);
-      const { data } = await runGhCli(this.config, { operationName: "IssueDetails", query: DETAILS_QUERY, variables: { ids: batch } });
+      const { data, failureHint } = await runGhCli(this.config, { operationName: "IssueDetails", query: DETAILS_QUERY, variables: { ids: batch } });
       stats.detailCalls++;
+      // Lỗi một phần do token (thiếu scope / hết đăng nhập) làm mọi node null: báo lỗi thay vì coi cả lô là `missing`.
+      if (failureHint === "scope_missing" || failureHint === "not_authenticated") throw new GitHubFailure(failureHint);
       const { nodes } = parse(detailsData, data);
       if (nodes.length !== batch.length) throw new GitHubFailure("bad_output", "shape");
       for (const [index, raw] of nodes.entries()) {

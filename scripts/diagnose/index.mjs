@@ -359,7 +359,7 @@ function checkGateway() {
       if (i === 0) out.field = project.statusFieldInfo;
       out.pages++;
       out.nodes.push(...items.nodes.filter(Boolean));
-      if (!items.pageInfo.hasNextPage) break;
+      if (!items.pageInfo.hasNextPage || !items.pageInfo.endCursor || items.pageInfo.endCursor === after) break;
       after = items.pageInfo.endCursor;
     }
     return out;

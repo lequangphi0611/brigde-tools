@@ -1,4 +1,4 @@
-import { GhCliGateway } from "../../contexts/tracking/infrastructure/gh-cli/gh-cli-gateway.ts";
+import { buildRealGitHubGateway } from "../../composition-root.ts";
 import { runGithubCheckSafely } from "./run-github-check.ts";
 
 const code = await runGithubCheckSafely({
@@ -6,6 +6,6 @@ const code = await runGithubCheckSafely({
   env: process.env,
   stdout: { write: (c) => void process.stdout.write(c) },
   stderr: { write: (c) => void process.stderr.write(c) },
-  createGateway: ({ onStderr }) => new GhCliGateway(onStderr ? { onStderr } : {}),
+  createGateway: ({ onStderr }) => buildRealGitHubGateway(onStderr ? { onStderr } : {}),
 });
 process.exitCode = code;

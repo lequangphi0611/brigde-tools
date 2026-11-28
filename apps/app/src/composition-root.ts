@@ -103,7 +103,7 @@ export function buildDeps(mode: string | undefined, real?: RealWiring): Deps {
   if (!real) throw new Error("Nhánh adapter thật cần RealWiring (chạy startup() trước) hoặc APP_ADAPTERS=fake.");
   const { config, storage } = real;
   const clock = systemClock;
-  const github = new GhCliGateway(real.gh ?? {});
+  const github = buildRealGitHubGateway(real.gh ?? {});
   const pollCycle = new PollCycle({
     github,
     repository: new SqliteTrackingRepository(storage),
@@ -130,6 +130,11 @@ export function buildDeps(mode: string | undefined, real?: RealWiring): Deps {
     scheduler,
     pollCycle,
   };
+}
+
+/** Adapter GitHub thật (`gh api graphql`, ADR-0010). Cùng một đường lắp cho `github-check` và nhánh thật của server. */
+export function buildRealGitHubGateway(gh: Partial<GhCliConfig> = {}): GhCliGateway {
+  return new GhCliGateway(gh);
 }
 
 export interface RealTranslatorOptions {

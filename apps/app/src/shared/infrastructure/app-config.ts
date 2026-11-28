@@ -35,7 +35,7 @@ const schema = z.object({
     owner: z.string().min(1),
     ownerType: z.enum(["org", "user"]).default("org"),
     number: z.number().int().positive(),
-    statusField: z.string().default("Status"),
+    statusField: z.string().min(1).default("Status"),
     closedStatuses: z.array(z.string().min(1)).default([]),
   }),
   pollIntervalMin: z.number().int().min(1).max(60).default(5),
