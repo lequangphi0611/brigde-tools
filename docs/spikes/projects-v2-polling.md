@@ -86,3 +86,11 @@ Project của user trên GHES (`ownerType: "user"`), `pnpm start`, `pollInterval
 - Thiếu `GH_HOST` → `[startup] FAIL gh_host_unset`.
 - Projects v2 của **user** trên GHES đọc được (trước đây chỉ đo project org). Chu kỳ ≈ 0,5 s khi yên, ≈ 1 s khi có một lần lấy chi tiết.
 - `github-check` chưa được gõ lại trong lần này; đường code quét + lấy chi tiết đã chạy thật qua poller.
+
+`github-check` trên cùng project cá nhân (`--owner-type user`), gõ lại sau đó:
+
+```
+github-check OK host=GH_HOST items=4 issues=4 skipped=pr:0,draft:0,noaccess:0 closed=1 statusField=found statusSet=4 statusOptions=2 pages=1 scanMs=514 recent=4 details=4 missing=0 detailCalls=1 comments=2 maxComments=1 commentPages=0 jaChars=1499 newerComment=0 editedComment=0 detailMs=528
+```
+
+→ Adapter đọc đủ chi tiết của 4/4 issue trong một lần gọi (`missing=0`), field Status có trên board user, tiếng Nhật về đủ (`jaChars=1499`). Lô thật (có body + comment) ≈ 0,5 s, ngang lô đo ở Lần 4.
