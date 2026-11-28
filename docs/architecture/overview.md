@@ -10,7 +10,7 @@ apps/app/src/
   contexts/<ctx>/domain          # entity, VO, invariant, event — thuần TS, không I/O
   contexts/<ctx>/application     # use case, gọi port
   contexts/<ctx>/infrastructure  # adapter: SQLite repo, gh CLI, claude CLI, toast
-  shared/ports/                  # port dùng chung: GitHubGateway, Notifier, Clock
+  shared/ports/                  # port dùng chung: GitHubGateway (scanProject + fetchIssueDetails), Notifier, Clock
   composition-root.ts            # nơi DUY NHẤT chọn adapter thật/fake
   server/                        # Hono routes (HTTP adapter)
   test-harness/                  # fake + /__test__ API, chỉ mount khi APP_ADAPTERS=fake

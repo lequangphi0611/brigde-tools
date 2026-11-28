@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 GH Issue Translator: process Node chạy nền trên Windows, theo dõi GitHub Projects v2 tiếng Nhật, dịch issue/comment sang tiếng Việt bằng `claude -p` local, báo bằng toast Windows, UI đọc ở `localhost`. Vision, phạm vi và câu hỏi mở: `docs/product/vision.md`. Lộ trình MVP theo mốc và story: `docs/product/roadmap.md`. Giao tiếp với user bằng tiếng Việt.
 
-Trạng thái hiện tại: khung + harness + runner Claude CLI (`packages/core-translate/src/infrastructure/claude-cli/`, ADR-0003). Adapter `Translator` thật, gh CLI, toast **chưa có** — mốc M0 trong roadmap là spike các điểm rủi ro đó trên Windows trước khi viết tính năng phụ thuộc vào chúng.
+Trạng thái hiện tại: khung + harness + runner Claude CLI (`packages/core-translate/src/infrastructure/claude-cli/`, ADR-0003). Adapter `Translator` thật, `GhCliGateway` (005a), poller (`PollCycle`/`PollScheduler`, 005b) và nhánh adapter thật của `pnpm start` (005c) đã có; toast **chưa có** — mốc M0 trong roadmap là spike các điểm rủi ro đó trên Windows trước khi viết tính năng phụ thuộc vào chúng.
 
 ## Lệnh
 
@@ -22,7 +22,9 @@ pnpm e2e e2e/specs/<file>.spec.ts   # một file e2e
 pnpm tokens                         # sinh apps/app/web/src/styles/tokens.css từ tokens.json
 pnpm diagnose                       # kiểm M0 trên máy Windows thật (GH_HOST, Projects v2, claude -p, --scheduler, --toast); không cần install
 pnpm -s translate-issue <file.json> [--config <path>] [--out <file>]  # dịch title+body của một issue (JSON xuất bằng gh) bằng claude -p thật, cache vào app.db; in dòng trạng thái cuối
-pnpm dev                            # chạy app (hiện chỉ chạy được với APP_ADAPTERS=fake)
+pnpm -s github-check --owner <org|user> --number <n> [--owner-type user] [--status-field <tên>] [--days <1-30>] [--max-details <1-200>] [--raw]  # cần GH_HOST; quét board Projects v2 + lấy chi tiết issue gần đây bằng `gh` thật, in một dòng số đếm (không ghi DB, không gọi Claude)
+pnpm start                          # chạy nhánh adapter thật: cần GH_HOST và <dataDir>/config.json (xem docs/spikes/diagnose.md, mục "Kiểm poller"); poll theo chu kỳ, in dòng [poll]
+pnpm dev                            # chạy app fake (APP_ADAPTERS=fake, qua cross-env) dạng watch
 ```
 
 ## Kiến trúc tổng
@@ -31,7 +33,7 @@ pnpm monorepo, TypeScript strict, ESM, import nội bộ có đuôi `.ts` (chạ
 
 - `packages/core-translate` — bounded context **Translation**, package dùng chung với một tool dịch chat khác → **không được import gì từ `apps/`**.
 - `apps/app/src/contexts/{tracking,notification}/{domain,application,infrastructure}` — các bounded context còn lại. Domain thuần (không I/O); application chỉ dùng domain + port; context không import domain của nhau, giao tiếp qua domain event hoặc ID. `apps/app/src/contexts/translation/infrastructure/` chỉ chứa adapter của app cho port trong core-translate (vd. `SqliteTranslationCache`, ADR-0009).
-- `apps/app/src/shared/ports` — port cho hệ ngoài (`GitHubGateway`, `Notifier`, `Clock`); `Translator` nằm trong core-translate.
+- `apps/app/src/shared/ports` — port cho hệ ngoài (`GitHubGateway`: `scanProject` + `fetchIssueDetails`, adapter thật `GhCliGateway` ở `contexts/tracking/infrastructure/gh-cli/`, `Notifier`, `Clock`); `Translator` nằm trong core-translate.
 - `apps/app/src/shared/infrastructure/sqlite` — hạ tầng lưu trữ dùng chung (`node:sqlite`: mở DB, pragma, transaction, migration). Một chuỗi migration toàn app `migrations/NNNN-<tên>.sql`, file đã merge thì không sửa, chỉ thêm file mới; thời gian lưu ISO UTC lấy từ `Clock`, không dùng `CURRENT_TIMESTAMP`. Repository adapter của context nằm trong `infrastructure/` của context đó. Chế độ fake dùng SQLite `:memory:` thật. Chi tiết: ADR-0008.
 - `apps/app/src/composition-root.ts` — **nơi duy nhất** chọn adapter thật hay fake, theo `APP_ADAPTERS`.
 - `apps/app/src/server` (Hono) phục vụ `/api/*` và build tĩnh của `apps/app/web` (Vite + React).

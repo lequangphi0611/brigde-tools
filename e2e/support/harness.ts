@@ -12,6 +12,10 @@ export class Harness {
   async setClock(nowIso: string) {
     await this.api.post("/__test__/clock", { data: { now: nowIso } });
   }
+  /** Chạy một chu kỳ poll (005b); trả `PollReport`. Chu kỳ đầu sau reset là BASELINE. */
+  async runPoll(): Promise<{ status: string; stats?: Record<string, unknown>; cause?: unknown }> {
+    return (await this.api.post("/__test__/poll")).json();
+  }
   async toasts(): Promise<Array<{ title: string; body: string; openUrl: string }>> {
     return (await this.api.get("/__test__/toasts")).json();
   }

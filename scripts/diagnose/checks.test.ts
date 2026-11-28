@@ -179,4 +179,79 @@ describe("diagnose: chọn claude và phân tích filter", () => {
     expect(c.localAppDataState({ LOCALAPPDATA: "x" })).toBe("set");
     expect(c.localAppDataState({})).toBe("unset");
   });
+
+  describe("005a: đo cho GhCliGateway", () => {
+    it("chunk chia lô", () => {
+      expect(c.chunk([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]]);
+      expect(c.chunk([], 25)).toEqual([]);
+    });
+
+    it("summarizeItemScan đếm Issue/PR/draft/không quyền, mỗi id một lần", () => {
+      const nodes = [
+        { content: { __typename: "Issue", id: "I_1", updatedAt: "2026-01-01T00:00:00Z" } },
+        { content: { __typename: "Issue", id: "I_1", updatedAt: "2026-01-01T00:00:00Z" } },
+        { content: { __typename: "Issue", id: "I_2", updatedAt: "2026-01-02T00:00:00Z" } },
+        { content: { __typename: "PullRequest" } },
+        { content: { __typename: "DraftIssue" } },
+        { content: null },
+      ];
+      expect(c.summarizeItemScan(nodes, 1)).toEqual({
+        pages: 1, items: 6, issues: 2, pullRequest: 1, draftIssue: 1, inaccessible: 1, closed: 0, statusSet: 0, statusOptions: 0, ids: ["I_1", "I_2"],
+      });
+    });
+
+    it("summarizeItemScan đếm closed, statusSet, statusOptions (không in giá trị)", () => {
+      const I = (id: string, state: string) => ({ __typename: "Issue", id, updatedAt: "2026-01-01T00:00:00Z", state });
+      const nodes = [
+        { content: I("I_1", "CLOSED"), status: { __typename: "ProjectV2ItemFieldSingleSelectValue", optionId: "a" } },
+        { content: I("I_2", "OPEN"), status: { __typename: "ProjectV2ItemFieldSingleSelectValue", optionId: "b" } },
+        { content: I("I_3", "OPEN"), status: { __typename: "ProjectV2ItemFieldSingleSelectValue", optionId: "a" } },
+        { content: I("I_4", "CLOSED"), status: null },
+        { content: I("I_4", "CLOSED") },
+        { content: { __typename: "PullRequest" }, status: { optionId: "c" } },
+      ];
+      expect(c.summarizeItemScan(nodes, 2)).toMatchObject({ issues: 4, closed: 2, statusSet: 4, statusOptions: 3 });
+    });
+
+    it("statusFieldState", () => {
+      expect(c.statusFieldState({ field: { __typename: "ProjectV2SingleSelectField" } })).toBe("found");
+      expect(c.statusFieldState({ field: null })).toBe("missing");
+      expect(c.statusFieldState({ unsupported: true, field: { x: 1 } })).toBe("unsupported");
+    });
+
+    it("summarizeComments đếm withComments, maxComments, over100, newerComment, editedComment", () => {
+      const T = "2026-03-10T00:00:00Z";
+      const issues = [
+        { updatedAt: T, comments: { totalCount: 0, nodes: [] } },
+        { updatedAt: T, comments: { totalCount: 3, nodes: [{ createdAt: "2026-03-09T00:00:00Z", updatedAt: "2026-03-09T00:00:00Z" }] } },
+        { updatedAt: T, comments: { totalCount: 150, nodes: [{ createdAt: "2026-03-11T00:00:00Z", updatedAt: "2026-03-11T00:00:00Z" }] } },
+        { updatedAt: T, comments: { totalCount: 2, nodes: [{ createdAt: "2026-03-01T00:00:00Z", updatedAt: "2026-03-12T00:00:00Z" }] } },
+        null,
+        {},
+      ];
+      expect(c.summarizeComments(issues)).toEqual({
+        issues: 4, withComments: 3, maxComments: 150, over100: 1, newerComment: 1, editedComment: 2,
+      });
+      expect(c.summarizeComments([])).toEqual({ issues: 0, withComments: 0, maxComments: 0, over100: 0, newerComment: 0, editedComment: 0 });
+    });
+
+    it("mutateNodeId giữ độ dài, khác id gốc", () => {
+      for (const id of ["I_kwDOABC123", "MDU6SXNzdWUx", "I_zzz9", "I_a"]) {
+        const m = c.mutateNodeId(id);
+        expect(m).not.toBe(id);
+        expect(m).toHaveLength(id.length);
+        expect(m.slice(0, -1)).toBe(id.slice(0, -1));
+      }
+    });
+
+    it("classifyPartial phân loại (exit 1 + JSON có data), (exit 1 + stdout rỗng), (exit 0)", () => {
+      const partial = JSON.stringify({ data: { nodes: [{ id: "I_1" }, null] }, errors: [{ message: "x" }] });
+      expect(c.classifyPartial({ code: 1, stdout: partial })).toEqual({ exit: 1, stdoutJson: true, data: 1, hasErrors: true });
+      expect(c.classifyPartial({ code: 1, stdout: "" })).toEqual({ exit: 1, stdoutJson: false, data: 0, hasErrors: false });
+      const ok = JSON.stringify({ data: { nodes: [{ id: "I_1" }, { id: "I_2" }] } });
+      expect(c.classifyPartial({ code: 0, stdout: ok })).toEqual({ exit: 0, stdoutJson: true, data: 2, hasErrors: false });
+      expect(c.classifyPartial({ code: 1, stdout: JSON.stringify({ errors: [{}] }) })).toMatchObject({ stdoutJson: false, hasErrors: true });
+      expect(c.classifyPartial({ code: 1, stdout: "not json" }).stdoutJson).toBe(false);
+    });
+  });
 });

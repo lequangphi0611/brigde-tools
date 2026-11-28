@@ -38,3 +38,11 @@ export function sqliteErrorInfo(e: unknown): { sqliteCode?: number; sqliteMessag
   }
   return info;
 }
+
+/** Lỗi lưu trữ (StorageError hoặc lỗi node:sqlite có errcode) → `{ sqliteCode? }`; không phải lỗi lưu trữ → undefined. */
+export function classifyStorageFailure(e: unknown): { sqliteCode?: number } | undefined {
+  const { sqliteCode } = sqliteErrorInfo(e);
+  const code = e instanceof StorageError ? e.sqliteCode : sqliteCode;
+  if (code !== undefined) return { sqliteCode: code };
+  return e instanceof StorageError ? {} : undefined;
+}

@@ -7,6 +7,7 @@
   },
   "scripts": {
     "dev": "pnpm --filter @app/app dev",
+    "start": "pnpm --filter @app/app start",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "test": "vitest run",
@@ -15,6 +16,7 @@
     "e2e:lock": "node scripts/e2e-lock.mjs write",
     "e2e:lock:check": "node scripts/e2e-lock.mjs check",
     "translate-issue": "tsx apps/app/src/cli/translate-issue/main.ts",
+    "github-check": "tsx apps/app/src/cli/github-check/main.ts",
     "diagnose": "node scripts/diagnose/index.mjs",
     "tokens": "node scripts/tokens/tokens-css.mjs",
     "verify": "pnpm typecheck && pnpm test && pnpm e2e:lock:check && pnpm e2e"

@@ -36,3 +36,61 @@ Nguồn: `pnpm diagnose` chạy trên máy công ty, người dùng gõ lại k�
 - → Filter `updated:` **không được là nguồn duy nhất** của poller. Poller phải so `Issue.updatedAt` phía client trên toàn bộ item (GHES tắt rate limit, 286 item ≈ 3 trang/chu kỳ), filter chỉ dùng được để thu hẹp nếu sau này cần.
 - `updated time`: server bỏ qua phần giờ/phút, nên filter có dùng thì cũng chỉ thu hẹp được theo ngày. Thêm một lý do để poller so `Issue.updatedAt` phía client.
 - Chưa rõ: lần này người dùng đã comment thử trước khi chạy hay chưa (không còn chặn 005 nếu quét toàn bộ).
+
+## Lần 4 (2026-11-27) — đo cho adapter GitHub (005a bước 1)
+
+Cùng máy, Node v24.9.0, gh 2.94.0, GHES 3.20.12. Các dòng đo chung (`updated:`, `filter basis`, `issue>item`, `updated time`) cho kết quả cùng hướng với Lần 2–3 (lần này base 286 = gt 23 + lt 263 + eq 0; `issue>item` vẫn 2/286).
+
+```
+item scan        OK    pages=3 items=286 issues=286 pr=0 draft=0 noaccess=0 closed=263 statusField=found statusSet=286 statusOptions=6 ms=1868
+gql stdin        OK    ms=493
+comments         OK    issues=286 withComments=145 maxComments=7 over100=0 newerComment=0 editedComment=0 batches=12 batchMs=520 batchMsMax=567
+gql partial      INFO  exit=1 stdoutJson=yes data=1 errors=yes
+```
+
+**Kết luận:**
+- Quét toàn board rẻ: 3 trang ≈ 1,9 s. Chu kỳ poll tính bằng phút là dư.
+- `closed=263/286`: chỉ 23 issue đang mở. Quy tắc close (005b) cắt gần hết việc lấy chi tiết.
+- `fieldValueByName` / `field(name:)` chạy được trên GHES 3.20 (`statusField=found`, 6 option, mọi item có giá trị). Quy tắc close dùng được cả state lẫn Status.
+- `gh api graphql --input -` chạy được → adapter truyền query + biến qua stdin.
+- Lô 25 id ≈ 0,5 s (tối đa 0,57 s), xa timeout → giữ `DETAIL_BATCH = 25` (lô thật nặng hơn vì có body và tới 100 comment, vẫn dư).
+- `over100=0`, `maxComments=7`: phân trang comment hầu như không chạy, AC-4 vẫn giữ.
+- `newerComment=0` trên 145 issue có comment: giả định "comment mới đẩy `Issue.updatedAt`" đúng trên mẫu này.
+- Lỗi một phần: `gh` exit 1 nhưng vẫn in JSON có `data` ra stdout → dùng `data`, id null vào `missing`; AC-6 giữ nguyên.
+- `editedComment=0` chỉ xét comment cuối mỗi issue: chưa có bằng chứng về sửa comment.
+- Còn mở: 2/286 `issue>item` là loại thay đổi gì — không còn chặn vì poller so `Issue.updatedAt` trên toàn board.
+- Node trên máy vẫn 24.9.0 (ADR-0004 khuyến nghị ≥ 24.15).
+
+## Lần 5 (2026-11-28) — kiểm poller trên project cá nhân (005c bước 6)
+
+Project của user trên GHES (`ownerType: "user"`), `pnpm start`, `pollIntervalMin` nhỏ. Người dùng gõ lại các dòng (theo thứ tự):
+
+```
+[poll] BASELINE issues=3 closed=0 skipped=pr:0,draft:0,noaccess:0 pages=1 ms=502
+[poll] OK issues=3 closed=1 details=0 missing=0 new=0 newComments=0 edited=0 closedChanged=1 failed=0 pages=1 ms=495
+[poll] OK issues=4 closed=1 details=1 missing=0 new=1 newComments=0 edited=0 closedChanged=0 failed=0 pages=1 ms=966
+[poll] OK issues=4 closed=1 details=1 missing=0 new=0 newComments=1 edited=0 closedChanged=0 failed=0 pages=1 ms=969
+[poll] OK issues=4 closed=1 details=1 missing=0 new=0 newComments=0 edited=1 closedChanged=0 failed=0 pages=1 ms=935
+[poll] OK issues=4 closed=1 details=0 missing=0 new=0 newComments=0 edited=0 closedChanged=1 failed=0 pages=1 ms=492
+(Ctrl+C, chạy lại) [poll] OK issues=4 closed=1 details=0 missing=0 new=0 newComments=0 edited=0 closedChanged=0 failed=0 pages=1 ms=520
+(bỏ GH_HOST) [startup] FAIL gh_host_unset
+```
+
+**Kết luận:** đủ 7 bước của spec 005c, thêm một trường hợp ngoài bảng.
+- Lần đầu chỉ lấy mốc (BASELINE), không lấy chi tiết.
+- Đóng một issue sau mốc → `closedChanged=1`, không lấy chi tiết, không event.
+- Issue mới → `new=1`, một lần lấy chi tiết (ngoài bảng, khớp AC-3 của 005b).
+- Comment vào issue mở → `newComments=1`; sửa body → `edited=1`.
+- Comment vào issue đã đóng → `closedChanged=1`, `details=0`, `newComments=0`.
+- Restart không lấy mốc lại (dòng đầu là `OK`, toàn 0 — cũng là chu kỳ "không có thay đổi").
+- Thiếu `GH_HOST` → `[startup] FAIL gh_host_unset`.
+- Projects v2 của **user** trên GHES đọc được (trước đây chỉ đo project org). Chu kỳ ≈ 0,5 s khi yên, ≈ 1 s khi có một lần lấy chi tiết.
+- `github-check` chưa được gõ lại trong lần này; đường code quét + lấy chi tiết đã chạy thật qua poller.
+
+`github-check` trên cùng project cá nhân (`--owner-type user`), gõ lại sau đó:
+
+```
+github-check OK host=GH_HOST items=4 issues=4 skipped=pr:0,draft:0,noaccess:0 closed=1 statusField=found statusSet=4 statusOptions=2 pages=1 scanMs=514 recent=4 details=4 missing=0 detailCalls=1 comments=2 maxComments=1 commentPages=0 jaChars=1499 newerComment=0 editedComment=0 detailMs=528
+```
+
+→ Adapter đọc đủ chi tiết của 4/4 issue trong một lần gọi (`missing=0`), field Status có trên board user, tiếng Nhật về đủ (`jaChars=1499`). Lô thật (có body + comment) ≈ 0,5 s, ngang lô đo ở Lần 4.
