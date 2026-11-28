@@ -3,7 +3,8 @@
 // Cấu hình bằng biến môi trường (adapter thật kế thừa process.env nên đi xuống được):
 //   FAKE_GH_FIXTURE  đường dẫn file JSON kiểu GitHubFixture (test-harness/github-fixture.ts)
 //   FAKE_GH_MODE     ok (mặc định) · partial (như ok; id không có trong fixture luôn trả null + errors + exit 1)
-//                    · auth · scope · scope-partial (data null + errors INSUFFICIENT_SCOPES, exit 1) · project-null · not-resolved · unsupported · network · hang · hang-grandchild · fail
+//                    · auth · scope · scope-partial (data null + errors INSUFFICIENT_SCOPES, exit 1; với IssueDetails: mọi node null)
+//                    · auth-partial (IssueDetails: mọi node null + errors Bad credentials, exit 1) · project-null · not-resolved · unsupported · network · hang · hang-grandchild · fail
 //                    · garbage · bad-shape · huge (FAKE_GH_HUGE_BYTES, mặc định 33 MiB)
 //   FAKE_GH_RECORD   file JSONL: mỗi lần gọi một dòng { argv, stdin, operationName, env }
 // Nhận diện query qua `operationName` trong body stdin: ScanProject · IssueDetails · IssueComments.
@@ -177,6 +178,13 @@ function commentNode(c) {
 function details(fixture, v) {
   const known = allIssues(fixture);
   const ids = Array.isArray(v.ids) ? v.ids : [];
+  if (mode === "scope-partial" || mode === "auth-partial") {
+    // Lỗi do token: GraphQL trả mọi node null kèm errors, gh thoát mã 1 — không được coi là "id không còn".
+    const message = mode === "scope-partial"
+      ? "Your token has not been granted the required scopes to execute this query. INSUFFICIENT_SCOPES"
+      : "Bad credentials";
+    return out({ nodes: ids.map(() => null) }, ids.map((_, i) => ({ type: mode === "scope-partial" ? "INSUFFICIENT_SCOPES" : "UNAUTHORIZED", path: ["nodes", i], message })));
+  }
   const nodes = ids.map((id) => (known.has(id) ? issueNode(known.get(id)) : null));
   const errors = ids.filter((id) => !known.has(id)).map((id) => ({ type: "NOT_FOUND", path: ["nodes", ids.indexOf(id)], message: `Could not resolve to a node with the global id of '${id}'` }));
   out({ nodes }, errors.length ? errors : undefined);

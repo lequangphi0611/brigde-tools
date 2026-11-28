@@ -150,6 +150,16 @@ describe("GhCliGateway.fetchIssueDetails", () => {
     expect(d.missing).toEqual(["I_gone"]);
   });
 
+  it.each<[string, GitHubFailureReason]>([
+    ["scope-partial", "scope_missing"],
+    ["auth-partial", "not_authenticated"],
+  ])("lỗi token một phần (%s: mọi node null + errors + exit 1) -> %s, không coi cả lô là missing", async (mode, reason) => {
+    const { gw } = gateway(contractFixture(), mode);
+    const e = await gw.fetchIssueDetails(["I_1", "I_2"]).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(GitHubFailure);
+    expect((e as GitHubFailure).reason).toBe(reason);
+  });
+
   it("AC-3: giữ nguyên từng byte tiếng Nhật, code block, emoji", async () => {
     const { gw } = gateway(contractFixture());
     const fixtureIssue = (contractFixture().items[3] as Extract<FixtureItem, { kind: "issue" }>).issue;
