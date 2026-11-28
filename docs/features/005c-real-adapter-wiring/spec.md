@@ -1,6 +1,6 @@
 # 005c — Lắp nhánh adapter thật + kiểm poller trên Windows thật
 
-- Trạng thái: approved (GATE 1, 2026-11-27)
+- Trạng thái: done (2026-11-28)
 - Context: hạ tầng dùng chung (cấu hình app `AppConfig`, nhánh adapter thật của `composition-root.ts`, `startup.ts`, `main.ts`); dùng `PollCycle` / `PollScheduler` của Tracking (005b), `GhCliGateway` (005a), `buildRealTranslator` (003b)
 - Cần UI: không
 
@@ -181,3 +181,4 @@ Không còn (các quyết định liên quan đã chốt ở GATE 1 của 005b: 
 | GATE 1 | 2026-11-27 | User duyệt (cùng GATE 1 của 005b): `config.json` ở `<dataDir>`, poll 5 phút (1–60), `pnpm start`, kiểm máy thật bằng project cá nhân GHES (`ownerType: "user"`) đủ 7 bước. Code gộp PR #11 với 005a, 005b. Trạng thái approved |
 | Implement 1–5 | 2026-11-27 | AppConfig, startup/format, nhánh thật buildDeps(mode, RealWiring), main.ts + `pnpm start`, docs (diagnose.md, CLAUDE.md). Chờ bước 6 (kiểm máy thật, user) |
 | Sửa theo review | 2026-11-27 | Review APPROVE; sửa: `toPollProjectConfig` về composition-root (app-config không import tracking), test claudeCliConfig vào translator, field `project.closedStatuses.0` (spec cho khớp), `isAbsoluteFor` cho claudeCliConfig, ghi chú lỗi đọc file ở diagnose.md, `pnpm dev` dùng cross-env APP_ADAPTERS=fake |
+| 6 Kiểm máy thật | 2026-11-28 | User chạy 7 bước trên project cá nhân GHES: đạt đủ (kèm issue mới `new=1`). Ghi ở `docs/spikes/projects-v2-polling.md` Lần 5. Story done; code trong PR #11 |

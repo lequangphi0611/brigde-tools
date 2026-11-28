@@ -60,3 +60,29 @@ gql partial      INFO  exit=1 stdoutJson=yes data=1 errors=yes
 - `editedComment=0` chỉ xét comment cuối mỗi issue: chưa có bằng chứng về sửa comment.
 - Còn mở: 2/286 `issue>item` là loại thay đổi gì — không còn chặn vì poller so `Issue.updatedAt` trên toàn board.
 - Node trên máy vẫn 24.9.0 (ADR-0004 khuyến nghị ≥ 24.15).
+
+## Lần 5 (2026-11-28) — kiểm poller trên project cá nhân (005c bước 6)
+
+Project của user trên GHES (`ownerType: "user"`), `pnpm start`, `pollIntervalMin` nhỏ. Người dùng gõ lại các dòng (theo thứ tự):
+
+```
+[poll] BASELINE issues=3 closed=0 skipped=pr:0,draft:0,noaccess:0 pages=1 ms=502
+[poll] OK issues=3 closed=1 details=0 missing=0 new=0 newComments=0 edited=0 closedChanged=1 failed=0 pages=1 ms=495
+[poll] OK issues=4 closed=1 details=1 missing=0 new=1 newComments=0 edited=0 closedChanged=0 failed=0 pages=1 ms=966
+[poll] OK issues=4 closed=1 details=1 missing=0 new=0 newComments=1 edited=0 closedChanged=0 failed=0 pages=1 ms=969
+[poll] OK issues=4 closed=1 details=1 missing=0 new=0 newComments=0 edited=1 closedChanged=0 failed=0 pages=1 ms=935
+[poll] OK issues=4 closed=1 details=0 missing=0 new=0 newComments=0 edited=0 closedChanged=1 failed=0 pages=1 ms=492
+(Ctrl+C, chạy lại) [poll] OK issues=4 closed=1 details=0 missing=0 new=0 newComments=0 edited=0 closedChanged=0 failed=0 pages=1 ms=520
+(bỏ GH_HOST) [startup] FAIL gh_host_unset
+```
+
+**Kết luận:** đủ 7 bước của spec 005c, thêm một trường hợp ngoài bảng.
+- Lần đầu chỉ lấy mốc (BASELINE), không lấy chi tiết.
+- Đóng một issue sau mốc → `closedChanged=1`, không lấy chi tiết, không event.
+- Issue mới → `new=1`, một lần lấy chi tiết (ngoài bảng, khớp AC-3 của 005b).
+- Comment vào issue mở → `newComments=1`; sửa body → `edited=1`.
+- Comment vào issue đã đóng → `closedChanged=1`, `details=0`, `newComments=0`.
+- Restart không lấy mốc lại (dòng đầu là `OK`, toàn 0 — cũng là chu kỳ "không có thay đổi").
+- Thiếu `GH_HOST` → `[startup] FAIL gh_host_unset`.
+- Projects v2 của **user** trên GHES đọc được (trước đây chỉ đo project org). Chu kỳ ≈ 0,5 s khi yên, ≈ 1 s khi có một lần lấy chi tiết.
+- `github-check` chưa được gõ lại trong lần này; đường code quét + lấy chi tiết đã chạy thật qua poller.
